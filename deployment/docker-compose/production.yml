@@ -1,7 +1,15 @@
 version: "3.8"
+
 services:
   app:
-    image: ghcr.io/your-org/your-repo:${IMAGE_TAG}
+    image: ghcr.io/${GITHUB_REPOSITORY}:${IMAGE_TAG}
+    restart: always
     ports:
       - "80:8000"
-    restart: always
+    environment:
+      - ENVIRONMENT=production
+    volumes:
+      - app_data:/data
+
+volumes:
+  app_data:

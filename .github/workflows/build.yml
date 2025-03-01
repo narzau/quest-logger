@@ -1,8 +1,8 @@
-name: Build and Push Docker Image
+name: Build and Push
 
 on:
   push:
-    branches: [main]
+    branches: [main, production]
 
 jobs:
   build:
@@ -14,28 +14,19 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Configure package visibility
-        run: |
-          mkdir -p .github
-          echo "package:\n  name: quest-logger\n  public: true" > .github/package.yml
-
-      - name: Set up Docker authentication
+      - name: Set up Docker auth
         run: |
           mkdir -p "${HOME}/.docker"
-          AUTH_TOKEN=$(echo -n "${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}" | base64 | tr -d '\n')
-          echo "{\"auths\":{\"ghcr.io\":{\"auth\":\"$AUTH_TOKEN\"}}}" > "${HOME}/.docker/config.json"
-          echo "Docker config:"
-          cat "${HOME}/.docker/config.json"
+          echo "{\"auths\":{\"ghcr.io\":{\"auth\":\"$(echo -n ${{ github.actor }}:${{ secrets.GITHUB_TOKEN }} | base64 | tr -d '\n')\"}}}" > "${HOME}/.docker/config.json"
 
-      - name: Build and push with Kaniko
+      - name: Build and push
         uses: docker://gcr.io/kaniko-project/executor:v1.9.0
         with:
           args: >-
             --context=/github/workspace
             --dockerfile=/github/workspace/Dockerfile
-            --destination=ghcr.io/${{ github.repository_owner }}/quest-logger:${{ github.ref_name | replace('/', '-') }}_${{ github.run_id }}
-            --destination=ghcr.io/${{ github.repository_owner }}/quest-logger:latest
+            --destination=ghcr.io/${{ github.repository }}:${{ github.run_id }}
+            --destination=ghcr.io/${{ github.repository }}:latest
             --cache=true
-            --verbosity=debug
         env:
           DOCKER_CONFIG: "${HOME}/.docker"
