@@ -7,6 +7,9 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -22,14 +25,11 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and push with Kaniko
-        uses: imjoseangel/action-kaniko@v2.1.0
-        env:
-          REGISTRY: ghcr.io
-          REPOSITORY: ${{ github.repository }}
+        uses: google-github-actions/build-push-kaniko@v2
         with:
           context: ${{ github.workspace }}
           dockerfile: ${{ github.workspace }}/Dockerfile
-          tags: |
-            ${{ github.ref_name }}_${{ github.run_id }}
-            ${{ github.ref_name }}_latest
+          destination: |
+            ghcr.io/${{ github.repository }}:${{ github.ref_name }}_${{ github.run_id }}
+            ghcr.io/${{ github.repository }}:${{ github.ref_name }}_latest
           cache: true
