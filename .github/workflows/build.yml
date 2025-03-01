@@ -7,9 +7,6 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    container:
-      image: gcr.io/kaniko-project/executor:v1.9.0-debug
-      options: --entrypoint=""
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -25,12 +22,14 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and push with Kaniko
+        uses: imjoseangel/action-kaniko@v2.1.0
         env:
-          CI_REGISTRY_IMAGE: ghcr.io/${{ github.repository }}
-        run: |
-          /kaniko/executor \
-            --context "${{ github.workspace }}" \
-            --dockerfile "${{ github.workspace }}/Dockerfile" \
-            --destination "${CI_REGISTRY_IMAGE}:${{ github.ref_name }}_${{ github.run_id }}" \
-            --destination "${CI_REGISTRY_IMAGE}:${{ github.ref_name }}_latest" \
-            --cache=true
+          REGISTRY: ghcr.io
+          REPOSITORY: ${{ github.repository }}
+        with:
+          context: ${{ github.workspace }}
+          dockerfile: ${{ github.workspace }}/Dockerfile
+          tags: |
+            ${{ github.ref_name }}_${{ github.run_id }}
+            ${{ github.ref_name }}_latest
+          cache: true

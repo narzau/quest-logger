@@ -29,5 +29,5 @@ jobs:
 
       - name: Copy and deploy
         run: |
-          scp -P ${{ secrets.ENVIRONMENT_PORT }} docker-compose.yaml root@${{ secrets.ENVIRONMENT_IP }}:/home/${{ github.ref_name }}/deploy/${{ secrets.APP_NAME }}/
-          ssh -p ${{ secrets.ENVIRONMENT_PORT }} root@${{ secrets.ENVIRONMENT_IP }} "cd /home/${{ github.ref_name }}/deploy/${{ secrets.APP_NAME }}/ && docker compose up -d"
+          scp -P ${{ secrets.ENVIRONMENT_PORT }} docker-compose.yaml deployer@${{ secrets.ENVIRONMENT_IP }}:/home/deployer/deploy/${{ secrets.APP_NAME }}/
+          ssh -p ${{ secrets.ENVIRONMENT_PORT }} deployer@${{ secrets.ENVIRONMENT_IP }} "cd /home/deployer/deploy/${{ secrets.APP_NAME }}/ && docker compose up -d"
