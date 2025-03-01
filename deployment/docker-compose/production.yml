@@ -1,8 +1,6 @@
-version: "3.8"
-
 services:
   app:
-    image: ghcr.io/${GITHUB_REPOSITORY}:${IMAGE_TAG}
+    image: ghcr.io/narzau/quest-logger:${IMAGE_TAG}
     restart: always
     ports:
       - "80:8000"

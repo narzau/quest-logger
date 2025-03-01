@@ -21,22 +21,30 @@ jobs:
           mkdir -p ~/.ssh
           echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
-
-          # Fix for custom port
-          ssh-keyscan -p ${{ secrets.SSH_PORT }} ${{ secrets.ENVIRONMENT_IP }} > ~/.ssh/known_hosts
-
-          # Verify connection
-          ssh -p ${{ secrets.SSH_PORT }} deployer@${{ secrets.ENVIRONMENT_IP }} "echo 'SSH connection successful!'"
+          ssh-keyscan -p "${{ secrets.SSH_PORT }}" "${{ secrets.ENVIRONMENT_IP }}" > ~/.ssh/known_hosts
 
       - name: Prepare and deploy
         run: |
+          # Get the actual image tag from build workflow
           IMAGE_TAG=${{ github.event.workflow_run.id }}
+
+          # Generate compose file with debug output
           sed "s/\${IMAGE_TAG}/$IMAGE_TAG/" deployment/docker-compose/production.yml > docker-compose.yaml
+          echo "=== GENERATED COMPOSE FILE ==="
+          cat docker-compose.yaml
 
-          scp -P ${{ secrets.SSH_PORT }} docker-compose.yaml deployer@${{ secrets.ENVIRONMENT_IP }}:/home/deployer/app/
+          # Copy compose file to server
+          scp -P "${{ secrets.SSH_PORT }}" docker-compose.yaml deployer@"${{ secrets.ENVIRONMENT_IP }}":/home/deployer/app/
 
-          ssh -p ${{ secrets.SSH_PORT }} deployer@${{ secrets.ENVIRONMENT_IP }} "
+          # Execute deployment commands
+          ssh -p "${{ secrets.SSH_PORT }}" deployer@"${{ secrets.ENVIRONMENT_IP }}" "
             cd /home/deployer/app
-            docker compose down
+            echo '=== CURRENT CONTAINERS ==='
+            docker ps -a
+            echo '=== STOPPING EXISTING ==='
+            docker compose down || true
+            echo '=== STARTING NEW ==='
             docker compose up -d
+            echo '=== UPDATED STATUS ==='
+            docker ps
           "
