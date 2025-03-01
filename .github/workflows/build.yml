@@ -16,12 +16,11 @@ jobs:
 
       - name: Configure credentials
         run: |
-          mkdir -p "${HOME}/.docker"
-          # GHCR requires the username to match your GitHub handle exactly
+          mkdir -p "/github/home/.docker"
           AUTH_STRING=$(echo -n "narzau:${{ secrets.CR_PAT }}" | base64 -w 0)
-          echo "{\"auths\":{\"ghcr.io\":{\"auth\":\"$AUTH_STRING\"}}}" > "${HOME}/.docker/config.json"
+          echo "{\"auths\":{\"ghcr.io\":{\"auth\":\"$AUTH_STRING\"}}}" > "/github/home/.docker/config.json"
           echo "Docker config contents:"
-          cat "${HOME}/.docker/config.json"
+          cat "/github/home/.docker/config.json"
 
       - name: Build and push
         uses: docker://gcr.io/kaniko-project/executor:v1.12.0
@@ -34,4 +33,4 @@ jobs:
             --verbosity=debug
             --push-retry=5
         env:
-          DOCKER_CONFIG: "${HOME}/.docker"
+          DOCKER_CONFIG: "/github/home/.docker"
