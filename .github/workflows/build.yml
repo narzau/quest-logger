@@ -14,10 +14,24 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set up Docker auth
+      - name: Verify package config
+        run: |
+          ls -la .github/
+          if [ -f .github/package.yml ]; then
+            echo "Package config exists"
+            cat .github/package.yml
+          else
+            echo "::error::Missing .github/package.yml"
+            exit 1
+          fi
+
+      - name: Configure Docker auth
         run: |
           mkdir -p "${HOME}/.docker"
-          echo "{\"auths\":{\"ghcr.io\":{\"auth\":\"$(echo -n ${{ github.actor }}:${{ secrets.GITHUB_TOKEN }} | base64 | tr -d '\n')\"}}}" > "${HOME}/.docker/config.json"
+          AUTH=$(echo -n "${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}" | base64 -w 0)
+          echo "{\"auths\":{\"ghcr.io\":{\"auth\":\"$AUTH\"}}}" > "${HOME}/.docker/config.json"
+          echo "Docker config contents:"
+          cat "${HOME}/.docker/config.json"
 
       - name: Build and push
         uses: docker://gcr.io/kaniko-project/executor:v1.9.0
@@ -25,8 +39,9 @@ jobs:
           args: >-
             --context=/github/workspace
             --dockerfile=/github/workspace/Dockerfile
-            --destination=ghcr.io/${{ github.repository }}:${{ github.run_id }}
-            --destination=ghcr.io/${{ github.repository }}:latest
+            --destination=ghcr.io/${{ github.repository_owner }}/quest-logger:latest
             --cache=true
+            --verbosity=debug
         env:
           DOCKER_CONFIG: "${HOME}/.docker"
+          REGISTRY_AUTH_FILE: "${HOME}/.docker/config.json"
