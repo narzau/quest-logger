@@ -20,7 +20,5 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy project
 COPY . .
 
-COPY scripts/debug_db.py /app/scripts/debug_db.py
-
 # Command to run the application
-CMD ["./scripts/start.sh"]
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
