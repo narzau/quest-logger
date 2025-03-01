@@ -1,0 +1,14 @@
+version: "3.8"
+
+services:
+  app:
+    image: ghcr.io/your-org/your-repo:${IMAGE_TAG}
+    restart: always
+    ports:
+      - "80:8000"
+    environment:
+      - ENVIRONMENT=production
+    volumes:
+      - ./data:/app/data
+
+  # Add other services as needed (e.g., Redis, Postgres)

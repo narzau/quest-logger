@@ -1,0 +1,33 @@
+name: Deploy to Production
+
+on:
+  workflow_run:
+    workflows: ["Build and Push Docker Image"]
+    types:
+      - completed
+
+jobs:
+  deploy:
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up SSH
+        run: |
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -p ${{ secrets.ENVIRONMENT_PORT }} ${{ secrets.ENVIRONMENT_IP }} >> ~/.ssh/known_hosts
+
+      - name: Prepare docker-compose
+        run: |
+          sed "s|\\\${IMAGE_TAG}|${{ github.ref_name }}_${{ github.event.workflow_run.id }}|" \
+            deployment/docker-compose/production.yml > docker-compose.yaml
+
+      - name: Copy and deploy
+        run: |
+          scp -P ${{ secrets.ENVIRONMENT_PORT }} docker-compose.yaml root@${{ secrets.ENVIRONMENT_IP }}:/home/${{ github.ref_name }}/deploy/${{ secrets.APP_NAME }}/
+          ssh -p ${{ secrets.ENVIRONMENT_PORT }} root@${{ secrets.ENVIRONMENT_IP }} "cd /home/${{ github.ref_name }}/deploy/${{ secrets.APP_NAME }}/ && docker compose up -d"
