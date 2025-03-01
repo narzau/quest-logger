@@ -3,7 +3,7 @@ name: Deploy to Production
 on:
   workflow_run:
     workflows: ["Build and Push"]
-    branches: [production]
+    branches: [production, main]
     types:
       - completed
 
