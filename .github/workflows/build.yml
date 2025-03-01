@@ -14,28 +14,25 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Verify Dockerfile existence
-        run: |
-          ls -la ${{ github.workspace }}
-          if [ ! -f "${{ github.workspace }}/Dockerfile" ]; then
-            echo "::error::Dockerfile not found at repository root!"
-            exit 1
-          fi
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Set up Docker authentication
+      - name: Set up Kaniko
         run: |
-          mkdir -p "${HOME}/.docker"
-          echo "{\"auths\":{\"ghcr.io\":{\"auth\":\"$(echo -n ${{ github.actor }}:${{ secrets.GITHUB_TOKEN }} | base64 | tr -d '\n')\"}}}" > "${HOME}/.docker/config.json"
+          mkdir -p /kaniko/.docker
+          echo "{\"auths\":{\"ghcr.io\":{\"auth\":\"$(echo -n ${{ github.actor }}:${{ secrets.GITHUB_TOKEN }} | base64 | tr -d '\n')\"}}}" > /kaniko/.docker/config.json
 
-      - name: Build and push with Kaniko
+      - name: Build and push
         uses: docker://gcr.io/kaniko-project/executor:v1.9.0
         with:
           args: >-
             --context=/github/workspace
             --dockerfile=/github/workspace/Dockerfile
-            --destination=ghcr.io/${{ github.repository }}:${{ github.ref_name }}_${{ github.run_id }}
-            --destination=ghcr.io/${{ github.repository }}:${{ github.ref_name }}_latest
+            --destination=ghcr.io/${{ github.repository_owner }}/${{ github.event.repository.name }}:${{ github.ref_name }}_${{ github.run_id }}
+            --destination=ghcr.io/${{ github.repository_owner }}/${{ github.event.repository.name }}:${{ github.ref_name }}_latest
             --cache=true
             --verbosity=debug
-        env:
-          DOCKER_CONFIG: "${HOME}/.docker"
