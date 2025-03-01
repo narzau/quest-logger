@@ -22,11 +22,10 @@ jobs:
       - name: Build and push with Kaniko
         uses: docker://gcr.io/kaniko-project/executor:v1.9.0
         env:
-          DOCKER_CONFIG: "${HOME}/.docker" # Point to writable config location
+          DOCKER_CONFIG: "${HOME}/.docker"
         with:
-          args: |
-            --context=${{ github.workspace }}
-            --dockerfile=${{ github.workspace }}/Dockerfile
-            --destination=ghcr.io/${{ github.repository }}:${{ github.ref_name }}_${{ github.run_id }}
-            --destination=ghcr.io/${{ github.repository }}:${{ github.ref_name }}_latest
+          args: --context=${{ github.workspace }} \
+            --dockerfile=${{ github.workspace }}/Dockerfile \
+            --destination=ghcr.io/${{ github.repository }}:${{ github.ref_name }}_${{ github.run_id }} \
+            --destination=ghcr.io/${{ github.repository }}:${{ github.ref_name }}_latest \
             --cache=true
