@@ -24,9 +24,9 @@ jobs:
         env:
           DOCKER_CONFIG: "${HOME}/.docker"
         with:
-          args:
-            - --context=${{ github.workspace }}
-            - --dockerfile=${{ github.workspace }}/Dockerfile
-            - --destination=ghcr.io/${{ github.repository }}:${{ github.ref_name }}_${{ github.run_id }}
-            - --destination=ghcr.io/${{ github.repository }}:${{ github.ref_name }}_latest
-            - --cache=true
+          args: |
+            --context=${{ github.workspace }}
+            --dockerfile=${{ github.workspace }}/Dockerfile
+            --destination=ghcr.io/${{ github.repository }}:${{ github.ref_name }}_${{ github.run_id }}
+            --destination=ghcr.io/${{ github.repository }}:${{ github.ref_name }}_latest
+            --cache=true
