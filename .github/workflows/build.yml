@@ -17,9 +17,8 @@ jobs:
       - name: Configure credentials
         run: |
           mkdir -p "${HOME}/.docker"
-          CREDENTIALS=$(echo -n "github:${{ secrets.CR_PAT }}" | base64 -w 0)
-          echo "{\"auths\":{\"ghcr.io\":{\"auth\":\"$CREDENTIALS\"}}}" > "${HOME}/.docker/config.json"
-          echo "Docker config:"
+          echo "{\"auths\":{\"ghcr.io\":{\"auth\":\"$(echo -n ${{ github.repository_owner }}:${{ secrets.CR_PAT }} | base64 | tr -d '\n')\"}}}" > "${HOME}/.docker/config.json"
+          echo "Docker config contents:"
           cat "${HOME}/.docker/config.json"
 
       - name: Build and push
@@ -28,9 +27,8 @@ jobs:
           args: >-
             --context=/github/workspace
             --dockerfile=/github/workspace/Dockerfile
-            --destination=ghcr.io/narzau/quest-logger:latest
+            --destination=ghcr.io/${{ github.repository_owner }}/quest-logger:latest
             --cache=true
             --verbosity=debug
-            --skip-tls-verify
         env:
           DOCKER_CONFIG: "${HOME}/.docker"
