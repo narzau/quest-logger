@@ -28,19 +28,21 @@ def create_user(
             status_code=400,
             detail="A user with this email already exists.",
         )
-    user = db.query(models.User).filter(models.User.username == user_in.username).first()
+    user = (
+        db.query(models.User).filter(models.User.username == user_in.username).first()
+    )
     if user:
         raise HTTPException(
             status_code=400,
             detail="A user with this username already exists.",
         )
-    
+
     user = models.User(
         email=user_in.email,
         username=user_in.username,
         hashed_password=get_password_hash(user_in.password),
         level=1,
-        experience=0
+        experience=0,
     )
     db.add(user)
     db.commit()
@@ -78,15 +80,15 @@ def update_user_me(
         user_in.email = email
     if username is not None:
         user_in.username = username
-    
+
     for field in ["email", "username"]:
         value = getattr(user_in, field)
         if value is not None:
             setattr(current_user, field, value)
-    
+
     if user_in.password is not None:
         current_user.hashed_password = get_password_hash(user_in.password)
-    
+
     db.add(current_user)
     db.commit()
     db.refresh(current_user)

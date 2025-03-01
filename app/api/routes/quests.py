@@ -1,6 +1,7 @@
 # app/api/endpoints/quests.py
-from typing import Any, List, Optional
+import datetime
 
+from typing import Any, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
@@ -24,12 +25,12 @@ def read_quests(
     Retrieve quests.
     """
     query = db.query(models.Quest).filter(models.Quest.owner_id == current_user.id)
-    
+
     if quest_type:
         query = query.filter(models.Quest.quest_type == quest_type)
     if is_completed is not None:
         query = query.filter(models.Quest.is_completed == is_completed)
-    
+
     quests = query.offset(skip).limit(limit).all()
     return quests
 
@@ -48,12 +49,12 @@ def create_quest(
     exp_reward = gamification_service.calculate_quest_exp_reward(
         rarity=quest_in.rarity,
         quest_type=quest_in.quest_type,
-        priority=quest_in.priority
+        priority=quest_in.priority,
     )
     quest = models.Quest(
-        **quest_in.model_dump(exclude={'exp_reward'}),
+        **quest_in.model_dump(exclude={"exp_reward"}),
         owner_id=current_user.id,
-        exp_reward=exp_reward
+        exp_reward=exp_reward,
     )
     db.add(quest)
     db.commit()
@@ -72,32 +73,77 @@ def update_quest(
     """
     Update a quest.
     """
-    quest = db.query(models.Quest).filter(
-        models.Quest.id == quest_id, models.Quest.owner_id == current_user.id
-    ).first()
-    
+    quest = (
+        db.query(models.Quest)
+        .filter(models.Quest.id == quest_id, models.Quest.owner_id == current_user.id)
+        .first()
+    )
+
     if not quest:
         raise HTTPException(status_code=404, detail="Quest not found")
-    
+
     was_completed_before = quest.is_completed
-    
+    completion_time = datetime.datetime.now(datetime.timezone.utc)
+
     # Update quest fields
-    for field in quest_in.__fields__:
-        if field in quest_in.__dict__ and quest_in.__dict__[field] is not None:
-            setattr(quest, field, quest_in.__dict__[field])
-    
-    # If quest was just completed, award XP to user
+    for field in quest_in.dict(exclude_unset=True):
+        setattr(quest, field, getattr(quest_in, field))
+
+    # Handle quest completion logic
     if not was_completed_before and quest.is_completed:
+        # Track completion time
+        quest.completed_at = completion_time
+
+        # Award experience
         current_user.experience += quest.exp_reward
-        # Check if user leveled up
-        level_up = gamification_service.check_and_apply_level_up(db, current_user)
-        # Check if any achievements were unlocked
-        gamification_service.check_and_award_achievements(db, current_user)
-    
+        db.add(current_user)
+
+        # Check for level up
+        gamification_service.check_and_apply_level_up(db, current_user)
+
+        # Update achievement progress
+        update_achievement_progress(db, current_user, quest, completion_time)
+
     db.add(quest)
     db.commit()
     db.refresh(quest)
     return quest
+
+
+def update_achievement_progress(
+    db: Session, user: models.User, quest: models.Quest, completion_time: datetime
+):
+    # Always update general quest completion
+    gamification_service.update_progress_and_check_achievements(
+        db=db, user=user, criterion_type="quests_completed", amount=1
+    )
+
+    # Update type-specific achievements
+    if quest.quest_type == models.QuestType.BOSS:
+        gamification_service.update_progress_and_check_achievements(
+            db=db, user=user, criterion_type="boss_quests_completed", amount=1
+        )
+    elif quest.quest_type == models.QuestType.EPIC:
+        gamification_service.update_progress_and_check_achievements(
+            db=db, user=user, criterion_type="legendary_quests_completed", amount=1
+        )
+
+    # Update time-based achievements
+    completion_hour = completion_time.hour
+    if completion_hour < 8:
+        gamification_service.update_progress_and_check_achievements(
+            db=db, user=user, criterion_type="early_morning_completion", amount=1
+        )
+    elif completion_hour >= 22:
+        gamification_service.update_progress_and_check_achievements(
+            db=db, user=user, criterion_type="late_night_completion", amount=1
+        )
+
+    # Update rarity-based achievements
+    if quest.rarity == models.QuestRarity.LEGENDARY:
+        gamification_service.update_progress_and_check_achievements(
+            db=db, user=user, criterion_type="legendary_quests_completed", amount=1
+        )
 
 
 @router.get("/{quest_id}", response_model=schemas.Quest)
@@ -110,13 +156,15 @@ def read_quest(
     """
     Get quest by ID.
     """
-    quest = db.query(models.Quest).filter(
-        models.Quest.id == quest_id, models.Quest.owner_id == current_user.id
-    ).first()
-    
+    quest = (
+        db.query(models.Quest)
+        .filter(models.Quest.id == quest_id, models.Quest.owner_id == current_user.id)
+        .first()
+    )
+
     if not quest:
         raise HTTPException(status_code=404, detail="Quest not found")
-    
+
     return quest
 
 
@@ -130,13 +178,15 @@ def delete_quest(
     """
     Delete a quest.
     """
-    quest = db.query(models.Quest).filter(
-        models.Quest.id == quest_id, models.Quest.owner_id == current_user.id
-    ).first()
-    
+    quest = (
+        db.query(models.Quest)
+        .filter(models.Quest.id == quest_id, models.Quest.owner_id == current_user.id)
+        .first()
+    )
+
     if not quest:
         raise HTTPException(status_code=404, detail="Quest not found")
-    
+
     db.delete(quest)
     db.commit()
     return quest

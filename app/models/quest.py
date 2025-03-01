@@ -1,6 +1,15 @@
 import enum
 from datetime import datetime
-from sqlalchemy import Boolean, Column, DateTime, Enum, ForeignKey, Integer, String, Text
+from sqlalchemy import (
+    Boolean,
+    Column,
+    DateTime,
+    Enum,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+)
 from sqlalchemy.orm import relationship
 
 from app.db.base import Base
@@ -36,7 +45,8 @@ class Quest(Base):
     exp_reward = Column(Integer, default=10)
     owner_id = Column(Integer, ForeignKey("users.id"))
     parent_quest_id = Column(Integer, ForeignKey("quests.id"), nullable=True)
-    
+    completed_at = Column(DateTime, nullable=True)
+
     # Relationships
     owner = relationship("User", back_populates="quests")
     sub_quests = relationship("Quest", backref="parent_quest", remote_side=[id])

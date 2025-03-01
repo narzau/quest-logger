@@ -14,6 +14,7 @@ class UserLogin(BaseModel):
     username: str = Field(..., description="Username or email address")
     password: str = Field(..., min_length=6, description="User password")
 
+
 # Properties to receive via API on creation
 class UserCreate(UserBase):
     email: EmailStr

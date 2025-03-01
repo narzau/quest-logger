@@ -12,11 +12,12 @@ class User(Base):
     username = Column(String, unique=True, index=True, nullable=False)
     hashed_password = Column(String, nullable=False)
     is_active = Column(Boolean(), default=True)
-    
+
     # Gamification stats
     level = Column(Integer, default=1)
     experience = Column(Integer, default=0)
-    
+
     # Relationships
     quests = relationship("Quest", back_populates="owner")
     achievements = relationship("UserAchievement", back_populates="user")
+    achievement_progress = relationship("UserAchievementProgress")
