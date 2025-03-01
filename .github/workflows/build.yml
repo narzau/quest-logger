@@ -14,10 +14,18 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Configure package visibility
+        run: |
+          mkdir -p .github
+          echo "package:\n  name: quest-logger\n  public: true" > .github/package.yml
+
       - name: Set up Docker authentication
         run: |
           mkdir -p "${HOME}/.docker"
-          echo "{\"auths\":{\"ghcr.io\":{\"auth\":\"$(echo -n ${{ github.actor }}:${{ secrets.GITHUB_TOKEN }} | base64 | tr -d '\n')\"}}}" > "${HOME}/.docker/config.json"
+          AUTH_TOKEN=$(echo -n "${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}" | base64 | tr -d '\n')
+          echo "{\"auths\":{\"ghcr.io\":{\"auth\":\"$AUTH_TOKEN\"}}}" > "${HOME}/.docker/config.json"
+          echo "Docker config:"
+          cat "${HOME}/.docker/config.json"
 
       - name: Build and push with Kaniko
         uses: docker://gcr.io/kaniko-project/executor:v1.9.0
@@ -25,8 +33,8 @@ jobs:
           args: >-
             --context=/github/workspace
             --dockerfile=/github/workspace/Dockerfile
-            --destination=ghcr.io/${{ github.repository }}:${{ github.ref_name }}_${{ github.run_id }}
-            --destination=ghcr.io/${{ github.repository }}:${{ github.ref_name }}_latest
+            --destination=ghcr.io/${{ github.repository_owner }}/quest-logger:${{ github.ref_name | replace('/', '-') }}_${{ github.run_id }}
+            --destination=ghcr.io/${{ github.repository_owner }}/quest-logger:latest
             --cache=true
             --verbosity=debug
         env:
