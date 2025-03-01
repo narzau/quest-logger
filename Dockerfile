@@ -9,7 +9,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 # Install system dependencies
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends gcc libpq-dev \
+    && apt-get install -y --no-install-recommends gcc libpq-dev ffmpeg \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 

@@ -1,3 +1,4 @@
+# app/core/config.py
 import secrets
 from typing import Any, List, Optional, Union, Dict
 
@@ -40,6 +41,25 @@ class Settings(BaseSettings):
     BASE_XP_REGULAR_QUEST: int = 10
     BASE_XP_EPIC_QUEST: int = 25
     BASE_XP_BOSS_QUEST: int = 50
+
+    # Speech-to-Text settings
+    DEFAULT_STT_PROVIDER: str = "deepgram"  # Default provider
+
+    # Provider-specific settings
+    # Deepgram
+    DEEPGRAM_API_KEY: str
+
+    # OpenRouter for LLM
+    OPENROUTER_API_KEY: str
+    OPENROUTER_API_URL: str = "https://openrouter.ai/api/v1"
+    OPENROUTER_DEFAULT_MODEL: str = (
+        "mistralai/mistral-7b-instruct"  # Default model for quest parsing
+    )
+
+    # Feature flags
+    ENABLE_LLM_FEATURES: bool = True
+    ENABLE_VOICE_FEATURES: bool = True
+    ENABLE_TRANSLATION: bool = True
 
     # Use SettingsConfigDict instead of Config class
     model_config = SettingsConfigDict(

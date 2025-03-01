@@ -1,4 +1,3 @@
-# app/api/endpoints/quests.py
 import datetime
 
 from typing import Any, List, Optional
