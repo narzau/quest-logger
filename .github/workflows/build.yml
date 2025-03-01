@@ -16,8 +16,8 @@ jobs:
 
       - name: Set up Docker authentication
         run: |
-          mkdir -p /kaniko/.docker
-          echo "{\"auths\":{\"ghcr.io\":{\"auth\":\"$(echo -n ${{ github.actor }}:${{ secrets.GITHUB_TOKEN }} | base64 | tr -d '\n')\"}}}" > /kaniko/.docker/config.json
+          mkdir -p "${HOME}/.docker"
+          echo "{\"auths\":{\"ghcr.io\":{\"auth\":\"$(echo -n ${{ github.actor }}:${{ secrets.GITHUB_TOKEN }} | base64 | tr -d '\n')\"}}}" > "${HOME}/.docker/config.json"
 
       - name: Build and push with Kaniko
         uses: docker://gcr.io/kaniko-project/executor:v1.9.0
@@ -28,3 +28,6 @@ jobs:
             --destination=ghcr.io/${{ github.repository }}:${{ github.ref_name }}_${{ github.run_id }}
             --destination=ghcr.io/${{ github.repository }}:${{ github.ref_name }}_latest
             --cache=true
+            --verbosity=debug
+        env:
+          DOCKER_CONFIG: "${HOME}/.docker"
