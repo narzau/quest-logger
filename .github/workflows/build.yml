@@ -14,34 +14,23 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Verify package config
-        run: |
-          ls -la .github/
-          if [ -f .github/package.yml ]; then
-            echo "Package config exists"
-            cat .github/package.yml
-          else
-            echo "::error::Missing .github/package.yml"
-            exit 1
-          fi
-
-      - name: Configure Docker auth
+      - name: Configure credentials
         run: |
           mkdir -p "${HOME}/.docker"
-          AUTH=$(echo -n "${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}" | base64 -w 0)
-          echo "{\"auths\":{\"ghcr.io\":{\"auth\":\"$AUTH\"}}}" > "${HOME}/.docker/config.json"
-          echo "Docker config contents:"
+          CREDENTIALS=$(echo -n "github:${{ secrets.CR_PAT }}" | base64 -w 0)
+          echo "{\"auths\":{\"ghcr.io\":{\"auth\":\"$CREDENTIALS\"}}}" > "${HOME}/.docker/config.json"
+          echo "Docker config:"
           cat "${HOME}/.docker/config.json"
 
       - name: Build and push
-        uses: docker://gcr.io/kaniko-project/executor:v1.9.0
+        uses: docker://gcr.io/kaniko-project/executor:v1.12.0
         with:
           args: >-
             --context=/github/workspace
             --dockerfile=/github/workspace/Dockerfile
-            --destination=ghcr.io/${{ github.repository_owner }}/quest-logger:latest
+            --destination=ghcr.io/narzau/quest-logger:latest
             --cache=true
             --verbosity=debug
+            --skip-tls-verify
         env:
           DOCKER_CONFIG: "${HOME}/.docker"
-          REGISTRY_AUTH_FILE: "${HOME}/.docker/config.json"
