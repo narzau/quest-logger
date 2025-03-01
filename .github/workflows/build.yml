@@ -14,13 +14,15 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set up Kaniko
+      - name: Set up Kaniko authentication
         run: |
-          mkdir -p /kaniko/.docker
-          echo "{\"auths\":{\"ghcr.io\":{\"auth\":\"$(echo -n ${{ github.actor }}:${{ secrets.GITHUB_TOKEN }} | base64 | tr -d '\n')\"}}}" > /kaniko/.docker/config.json
+          mkdir -p "${HOME}/.docker"
+          echo "{\"auths\":{\"ghcr.io\":{\"auth\":\"$(echo -n ${{ github.actor }}:${{ secrets.GITHUB_TOKEN }} | base64 | tr -d '\n')\"}}}" > "${HOME}/.docker/config.json"
 
       - name: Build and push with Kaniko
         uses: docker://gcr.io/kaniko-project/executor:v1.9.0
+        env:
+          DOCKER_CONFIG: "${HOME}/.docker" # Point to writable config location
         with:
           args: |
             --context=${{ github.workspace }}
