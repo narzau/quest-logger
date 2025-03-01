@@ -14,6 +14,14 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Verify Dockerfile existence
+        run: |
+          ls -la ${{ github.workspace }}
+          if [ ! -f "${{ github.workspace }}/Dockerfile" ]; then
+            echo "::error::Dockerfile not found at repository root!"
+            exit 1
+          fi
+
       - name: Set up Docker authentication
         run: |
           mkdir -p "${HOME}/.docker"
@@ -23,8 +31,8 @@ jobs:
         uses: docker://gcr.io/kaniko-project/executor:v1.9.0
         with:
           args: >-
-            --context=${{ github.workspace }}
-            --dockerfile=${{ github.workspace }}/Dockerfile
+            --context=/github/workspace
+            --dockerfile=/github/workspace/Dockerfile
             --destination=ghcr.io/${{ github.repository }}:${{ github.ref_name }}_${{ github.run_id }}
             --destination=ghcr.io/${{ github.repository }}:${{ github.ref_name }}_latest
             --cache=true
