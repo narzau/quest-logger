@@ -17,7 +17,9 @@ jobs:
       - name: Configure credentials
         run: |
           mkdir -p "${HOME}/.docker"
-          echo "{\"auths\":{\"ghcr.io\":{\"auth\":\"$(echo -n ${{ github.repository_owner }}:${{ secrets.CR_PAT }} | base64 | tr -d '\n')\"}}}" > "${HOME}/.docker/config.json"
+          # GHCR requires the username to match your GitHub handle exactly
+          AUTH_STRING=$(echo -n "narzau:${{ secrets.CR_PAT }}" | base64 -w 0)
+          echo "{\"auths\":{\"ghcr.io\":{\"auth\":\"$AUTH_STRING\"}}}" > "${HOME}/.docker/config.json"
           echo "Docker config contents:"
           cat "${HOME}/.docker/config.json"
 
@@ -27,8 +29,9 @@ jobs:
           args: >-
             --context=/github/workspace
             --dockerfile=/github/workspace/Dockerfile
-            --destination=ghcr.io/${{ github.repository_owner }}/quest-logger:latest
+            --destination=ghcr.io/narzau/quest-logger:latest
             --cache=true
             --verbosity=debug
+            --push-retry=5
         env:
           DOCKER_CONFIG: "${HOME}/.docker"
