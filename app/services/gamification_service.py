@@ -51,17 +51,114 @@ def check_and_apply_level_up(db: Session, user: models.User) -> bool:
     Check if user has enough XP to level up and apply the level up if so.
     Returns True if user leveled up, False otherwise.
     """
+    original_level = user.level
     xp_needed = calculate_xp_for_next_level(user.level)
 
-    if user.experience >= xp_needed:
+    # Track level increases
+    while user.experience >= xp_needed:
         user.level += 1
-        # We don't reset experience, just let it accumulate
+        xp_needed = calculate_xp_for_next_level(user.level)
+
+    if user.level > original_level:
         db.add(user)
-        db.commit()
-        db.refresh(user)
+        db.commit()  # Commit level change first
+        update_level_progress(db, user)
         return True
 
     return False
+
+
+def update_level_progress(db: Session, user: models.User):
+    """Update progress for all level-based criteria"""
+    level_criteria = (
+        db.query(models.AchievementCriterion)
+        .filter(models.AchievementCriterion.criterion_type == "user_level")
+        .all()
+    )
+
+    for criterion in level_criteria:
+        progress = (
+            db.query(models.UserAchievementProgress)
+            .filter(
+                models.UserAchievementProgress.user_id == user.id,
+                models.UserAchievementProgress.criterion_id == criterion.id,
+            )
+            .first()
+        )
+
+        if not progress:
+            progress = models.UserAchievementProgress(
+                user_id=user.id, criterion_id=criterion.id, progress=user.level
+            )
+            db.add(progress)
+        else:
+            progress.progress = max(progress.progress, user.level)
+            db.add(progress)
+
+    db.commit()
+    check_achievements(db, user)
+
+
+def check_achievements(db: Session, user: models.User):
+    new_achievements = []
+
+    all_achievements = (
+        db.query(models.Achievement)
+        .options(joinedload(models.Achievement.criteria))
+        .all()
+    )
+
+    for achievement in all_achievements:
+        # Skip if non-repeatable and already earned
+        if not achievement.is_repeatable and any(
+            ua.achievement_id == achievement.id for ua in user.achievements
+        ):
+            continue
+
+        all_met = True
+        for criterion in achievement.criteria:
+            progress = next(
+                (
+                    p
+                    for p in user.achievement_progress
+                    if p.criterion_id == criterion.id
+                ),
+                None,
+            )
+
+            # Handle level comparison differently
+            if criterion.criterion_type == "user_level":
+                current_value = user.level
+            else:
+                current_value = progress.progress if progress else 0
+
+            if current_value < criterion.target_value:
+                all_met = False
+                break
+
+        if all_met:
+            existing = next(
+                (ua for ua in user.achievements if ua.achievement_id == achievement.id),
+                None,
+            )
+
+            if existing and achievement.is_repeatable:
+                existing.times_earned += 1
+                existing.unlocked_at = datetime.utcnow()
+                db.add(existing)
+            elif not existing:
+                user_achievement = models.UserAchievement(
+                    user_id=user.id, achievement_id=achievement.id
+                )
+                db.add(user_achievement)
+
+            user.experience += achievement.exp_reward
+            new_achievements.append(achievement)
+
+    if new_achievements:
+        db.commit()
+
+    return new_achievements
 
 
 def update_progress_and_check_achievements(
@@ -78,10 +175,8 @@ def update_progress_and_check_achievements(
         progress = (
             db.query(models.UserAchievementProgress)
             .filter(
-                and_(
-                    models.UserAchievementProgress.user_id == user.id,
-                    models.UserAchievementProgress.criterion_id == criterion.id,
-                )
+                models.UserAchievementProgress.user_id == user.id,
+                models.UserAchievementProgress.criterion_id == criterion.id,
             )
             .first()
         )
@@ -100,82 +195,4 @@ def update_progress_and_check_achievements(
                 db.add(progress)
 
     db.commit()
-    return check_achievements(db, user)
-
-
-def check_achievements(db: Session, user: models.User):
-    new_achievements = []
-
-    # Get all possible achievements
-    all_achievements = (
-        db.query(models.Achievement)
-        .options(joinedload(models.Achievement.criteria))
-        .all()
-    )
-
-    for achievement in all_achievements:
-        # Check if already earned (for non-repeatable)
-        if not achievement.is_repeatable:
-            existing = (
-                db.query(models.UserAchievement)
-                .filter(
-                    and_(
-                        models.UserAchievement.user_id == user.id,
-                        models.UserAchievement.achievement_id == achievement.id,
-                    )
-                )
-                .first()
-            )
-            if existing:
-                continue
-
-        # Check all criteria
-        all_met = True
-        for criterion in achievement.criteria:
-            progress = (
-                db.query(models.UserAchievementProgress)
-                .filter(
-                    and_(
-                        models.UserAchievementProgress.user_id == user.id,
-                        models.UserAchievementProgress.criterion_id == criterion.id,
-                    )
-                )
-                .first()
-            )
-
-            if not progress or progress.progress < criterion.target_value:
-                all_met = False
-                break
-
-        if all_met:
-            # Award achievement
-            user_achievement = (
-                db.query(models.UserAchievement)
-                .filter(
-                    and_(
-                        models.UserAchievement.user_id == user.id,
-                        models.UserAchievement.achievement_id == achievement.id,
-                    )
-                )
-                .first()
-            )
-
-            if user_achievement and achievement.is_repeatable:
-                user_achievement.times_earned += 1
-                user_achievement.unlocked_at = datetime.datetime.now(
-                    datetime.timezone.utc
-                )()
-            else:
-                user_achievement = models.UserAchievement(
-                    user_id=user.id, achievement_id=achievement.id
-                )
-                db.add(user_achievement)
-
-            # Award XP
-            user.experience += achievement.exp_reward
-            new_achievements.append(achievement)
-
-    if new_achievements:
-        db.commit()
-
-    return new_achievements
+    check_achievements(db, user)

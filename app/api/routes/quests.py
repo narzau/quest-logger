@@ -70,9 +70,6 @@ def update_quest(
     quest_in: schemas.QuestUpdate,
     current_user: models.User = Depends(deps.get_current_active_user),
 ) -> Any:
-    """
-    Update a quest.
-    """
     quest = (
         db.query(models.Quest)
         .filter(models.Quest.id == quest_id, models.Quest.owner_id == current_user.id)
@@ -89,20 +86,20 @@ def update_quest(
     for field in quest_in.dict(exclude_unset=True):
         setattr(quest, field, getattr(quest_in, field))
 
-    # Handle quest completion logic
     if not was_completed_before and quest.is_completed:
-        # Track completion time
         quest.completed_at = completion_time
-
-        # Award experience
         current_user.experience += quest.exp_reward
         db.add(current_user)
+        db.commit()  # Commit XP update first
 
-        # Check for level up
-        gamification_service.check_and_apply_level_up(db, current_user)
+        # Check for level-based achievements
+        level_up = gamification_service.check_and_apply_level_up(db, current_user)
 
-        # Update achievement progress
-        update_achievement_progress(db, current_user, quest, completion_time)
+        # Update quest-specific achievements
+        update_quest_achievements(db, current_user, quest, completion_time)
+
+        # Explicit achievement check
+        gamification_service.check_achievements(db, current_user)
 
     db.add(quest)
     db.commit()
@@ -110,15 +107,15 @@ def update_quest(
     return quest
 
 
-def update_achievement_progress(
+def update_quest_achievements(
     db: Session, user: models.User, quest: models.Quest, completion_time: datetime
 ):
-    # Always update general quest completion
+    # General quest completion
     gamification_service.update_progress_and_check_achievements(
         db=db, user=user, criterion_type="quests_completed", amount=1
     )
 
-    # Update type-specific achievements
+    # Type-specific achievements
     if quest.quest_type == models.QuestType.BOSS:
         gamification_service.update_progress_and_check_achievements(
             db=db, user=user, criterion_type="boss_quests_completed", amount=1
@@ -128,7 +125,7 @@ def update_achievement_progress(
             db=db, user=user, criterion_type="legendary_quests_completed", amount=1
         )
 
-    # Update time-based achievements
+    # Time-based achievements
     completion_hour = completion_time.hour
     if completion_hour < 8:
         gamification_service.update_progress_and_check_achievements(
@@ -139,7 +136,7 @@ def update_achievement_progress(
             db=db, user=user, criterion_type="late_night_completion", amount=1
         )
 
-    # Update rarity-based achievements
+    # Rarity-based achievements
     if quest.rarity == models.QuestRarity.LEGENDARY:
         gamification_service.update_progress_and_check_achievements(
             db=db, user=user, criterion_type="legendary_quests_completed", amount=1
