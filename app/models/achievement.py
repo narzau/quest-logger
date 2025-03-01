@@ -1,4 +1,3 @@
-# app/models/achievement.py
 from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import relationship
 from datetime import datetime

@@ -1,4 +1,3 @@
-# app/models/quest.py
 import enum
 from datetime import datetime
 from sqlalchemy import Boolean, Column, DateTime, Enum, ForeignKey, Integer, String, Text

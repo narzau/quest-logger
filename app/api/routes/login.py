@@ -3,7 +3,6 @@ from datetime import timedelta
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
-from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 
 from app import models, schemas
@@ -16,23 +15,36 @@ router = APIRouter()
 
 @router.post("/access-token", response_model=schemas.Token)
 def login_access_token(
+    *,
     db: Session = Depends(deps.get_db),
-    form_data: OAuth2PasswordRequestForm = Depends()
+    login_input: schemas.UserLogin
 ) -> Any:
     """
-    OAuth2 compatible token login, get an access token for future requests
+    Login with email/username and password, get an access token for future requests
     """
-    user = db.query(models.User).filter(models.User.email == form_data.username).first()
-    if not user:
-        user = db.query(models.User).filter(models.User.username == form_data.username).first()
+    # Try to find user by email
+    user = db.query(models.User).filter(models.User.email == login_input.username).first()
     
-    if not user or not security.verify_password(form_data.password, user.hashed_password):
+    # If not found by email, try username
+    if not user:
+        user = db.query(models.User).filter(models.User.username == login_input.username).first()
+    
+    # Validate credentials
+    if not user or not security.verify_password(login_input.password, user.hashed_password):
         raise HTTPException(status_code=400, detail="Incorrect email/username or password")
     
+    # Create access token
     access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+    
     return {
         "access_token": security.create_access_token(
             user.id, expires_delta=access_token_expires
         ),
         "token_type": "bearer",
+        "user": {
+            "id": user.id,
+            "username": user.username,
+            "email": user.email,
+            # Add any other user details you want to return
+        }
     }

@@ -50,9 +50,8 @@ def create_quest(
         quest_type=quest_in.quest_type,
         priority=quest_in.priority
     )
-    
     quest = models.Quest(
-        **quest_in.dict(),
+        **quest_in.model_dump(exclude={'exp_reward'}),
         owner_id=current_user.id,
         exp_reward=exp_reward
     )
