@@ -39,7 +39,7 @@ jobs:
             docker compose -f docker-compose.api.yml pull
             
             # Run migrations with new image
-            docker compose -f docker-compose.api.yml run --rm app \
+            docker compose -f docker-compose.api.yml run --rm api \
               alembic upgrade head
             
             # Rotate containers

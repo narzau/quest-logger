@@ -1,5 +1,5 @@
 services:
-  app:
+  api:
     image: ghcr.io/narzau/quest-logger:${IMAGE_TAG}
     restart: unless-stopped
     networks:
