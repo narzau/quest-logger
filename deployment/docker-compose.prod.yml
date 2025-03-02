@@ -3,14 +3,19 @@ services:
     image: ghcr.io/narzau/quest-logger:${IMAGE_TAG}
     restart: unless-stopped
     networks:
+      - proxy-network
       - backend
     environment:
+      - PORT=8000
       - UVICORN_PROXY_HEADERS=1
       - FORWARDED_ALLOW_IPS=*
     env_file:
       - ./.env
 
 networks:
+  proxy-network:
+    name: proxy-network
+    external: true
   backend:
     name: backend
     external: true
