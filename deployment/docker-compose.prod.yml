@@ -5,7 +5,7 @@ services:
     networks:
       - backend
     environment:
-      - SQLALCHEMY_DATABASE_URI=${SQLALCHEMY_DATABASE_URI}
+      SQLALCHEMY_DATABASE_URI: ${SQLALCHEMY_DATABASE_URI}
 
 networks:
   backend:
