@@ -8,7 +8,7 @@ from app.core.config import settings
 app = FastAPI(
     title="ADHD Quest Tracker API",
     description="API for a gamified task tracking app designed for people with ADHD",
-    version="0.1.0",
+    version="0.2.0",
 )
 
 # Set up CORS middleware
