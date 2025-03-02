@@ -26,16 +26,23 @@ jobs:
       - name: Prepare and deploy
         run: |
           IMAGE_TAG=${{ github.event.workflow_run.id }}
-          sed "s/\${IMAGE_TAG}/$IMAGE_TAG/" deployment/docker-compose/production.yml > docker-compose.yaml
 
-          scp -P "${{ secrets.SSH_PORT }}" docker-compose.yaml deployer@"${{ secrets.ENVIRONMENT_IP }}":/home/deployer/app/
+          # Create migration-aware compose file
+          sed "s/\${IMAGE_TAG}/$IMAGE_TAG/" deployment/docker-compose.prod.yml > docker-compose.api.yml
+
+          scp -P "${{ secrets.SSH_PORT }}" docker-compose.api.yml deployer@"${{ secrets.ENVIRONMENT_IP }}":/home/deployer/app/
 
           ssh -p "${{ secrets.SSH_PORT }}" deployer@"${{ secrets.ENVIRONMENT_IP }}" "
-            # Login to GHCR
-            echo ${{ secrets.CR_PAT }} | docker login ghcr.io -u ${{ github.repository_owner }} --password-stdin
-            
-            # Deployment commands
             cd /home/deployer/app
-            docker compose down || true
-            docker compose up -d
+            
+            # Pull new image first
+            docker compose -f docker-compose.api.yml pull
+            
+            # Run migrations with new image
+            docker compose -f docker-compose.api.yml run --rm api \
+              alembic upgrade head
+            
+            # Rotate containers
+            docker compose -f docker-compose.api.yml down
+            docker compose -f docker-compose.api.yml up -d
           "
