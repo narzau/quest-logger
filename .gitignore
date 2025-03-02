@@ -32,10 +32,7 @@ ENV/
 *.swo
 .DS_Store
 
-# Project specific
-alembic/versions/*.py
-!alembic/versions/__init__.py
-alembic.ini
+
 *.db
 *.sqlite
 *.sqlite3
