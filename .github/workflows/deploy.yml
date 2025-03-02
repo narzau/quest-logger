@@ -27,22 +27,24 @@ jobs:
         run: |
           IMAGE_TAG=${{ github.event.workflow_run.id }}
 
-          # Create migration-aware compose file
           sed "s/\${IMAGE_TAG}/$IMAGE_TAG/" deployment/docker-compose.prod.yml > docker-compose.api.yml
 
           scp -P "${{ secrets.SSH_PORT }}" docker-compose.api.yml deployer@"${{ secrets.ENVIRONMENT_IP }}":/home/deployer/app/
 
           ssh -p "${{ secrets.SSH_PORT }}" deployer@"${{ secrets.ENVIRONMENT_IP }}" "
+            # Create network if not exists
+            docker network create backend --driver bridge || true
+            
             cd /home/deployer/app
             
-            # Pull new image first
+            # Pull new image
             docker compose -f docker-compose.api.yml pull
             
-            # Run migrations with new image
+            # Run migrations
             docker compose -f docker-compose.api.yml run --rm api \
               alembic upgrade head
             
-            # Rotate containers
-            docker compose -f docker-compose.api.yml down
-            docker compose -f docker-compose.api.yml up -d
+            # Deploy application
+            docker compose -f docker-compose.api.yml down --timeout 30
+            docker compose -f docker-compose.api.yml up -d --wait
           "
