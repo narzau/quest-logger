@@ -4,9 +4,10 @@ services:
     restart: unless-stopped
     networks:
       - backend
-    environment:
-      SQLALCHEMY_DATABASE_URI: ${SQLALCHEMY_DATABASE_URI}
+    env_file:
+      - ./.env
 
 networks:
   backend:
+    name: backend
     external: true
