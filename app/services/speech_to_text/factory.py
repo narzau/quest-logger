@@ -51,3 +51,10 @@ class STTServiceFactory:
         available["deepgram"] = bool(settings.DEEPGRAM_API_KEY)
 
         return available
+
+
+def get_stt_factory() -> STTServiceFactory:
+    """
+    Provides an LLMService instance for dependency injection.
+    """
+    return STTServiceFactory()

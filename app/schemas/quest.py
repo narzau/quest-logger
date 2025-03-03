@@ -16,6 +16,7 @@ class QuestBase(BaseModel):
     priority: int = 1
     exp_reward: int = 10
     parent_quest_id: Optional[int] = None
+    tracked: bool = True
 
 
 # Properties to receive on quest creation

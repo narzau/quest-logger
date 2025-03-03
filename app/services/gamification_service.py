@@ -144,7 +144,7 @@ def check_achievements(db: Session, user: models.User):
 
             if existing and achievement.is_repeatable:
                 existing.times_earned += 1
-                existing.unlocked_at = datetime.utcnow()
+                existing.unlocked_at = datetime.datetime.now(datetime.timezone.utc)
                 db.add(existing)
             elif not existing:
                 user_achievement = models.UserAchievement(
