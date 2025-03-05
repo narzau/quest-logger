@@ -13,13 +13,13 @@ class TranscriptionResult:
     def __init__(
         self,
         text: str,
-        language_detected: Optional[str] = None,
+        language: Optional[str] = None,
         confidence: Optional[float] = None,
         translation: Optional[str] = None,
         raw_response: Optional[Dict[str, Any]] = None,
     ):
         self.text = text  # Original transcribed text
-        self.language_detected = language_detected  # Detected language code
+        self.language = language  # Detected language code
         self.confidence = confidence  # Confidence score if available
         self.translation = translation  # Translated text (if requested)
         self.raw_response = raw_response  # Original provider response
@@ -43,7 +43,6 @@ class BaseSTTService(ABC):
         self,
         audio_file: UploadFile,
         language: Optional[str] = None,
-        translate_to_english: bool = False,
     ) -> TranscriptionResult:
         """
         Transcribe audio file to text
@@ -51,7 +50,6 @@ class BaseSTTService(ABC):
         Args:
             audio_file: The audio file to transcribe
             language: Optional language hint (ISO code)
-            translate_to_english: Whether to translate non-English results to English
 
         Returns:
             TranscriptionResult object with standardized output

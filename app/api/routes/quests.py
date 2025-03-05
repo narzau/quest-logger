@@ -9,8 +9,7 @@ from app import models, schemas
 from app.api import deps
 from app.services import gamification_service
 from app.services.llm_service import LLMService, get_llm_service
-from app.services.speech_to_text.factory import STTServiceFactory, get_stt_factory
-from app.services.voice_quest_service import VoiceQuestService, get_voice_quest_service
+from app.services.speech_to_text.factory import BaseSTTService, get_stt_service
 from app.core.config import settings
 
 router = APIRouter()
@@ -201,11 +200,9 @@ async def create_quest_from_voice(
     db: Session = Depends(deps.get_db),
     audio_file: UploadFile = File(...),
     language: Optional[str] = Form(None),
-    stt_provider: Optional[str] = Form(None),
     current_user: models.User = Depends(deps.get_current_active_user),
-    voice_service: VoiceQuestService = Depends(get_voice_quest_service),
+    sst_service: BaseSTTService = Depends(get_stt_service),
     llm_service: LLMService = Depends(get_llm_service),
-    stt_factory: STTServiceFactory = Depends(get_stt_factory),
 ) -> Any:
     """
     Create a new quest from voice input.
@@ -238,56 +235,32 @@ async def create_quest_from_voice(
             detail=f"Unsupported audio format: {audio_file.content_type}. Supported formats: WAV, MP3, WebM, OGG, M4A",
         )
 
-    # Check if specified provider is available
-    if stt_provider:
-        available_providers = stt_factory.get_available_providers()
-        if (
-            stt_provider not in available_providers
-            or not available_providers[stt_provider]
-        ):
-            raise HTTPException(
-                status_code=400,
-                detail=f"Requested STT provider '{stt_provider}' is not configured. Available providers: {[p for p, available in available_providers.items() if available]}",
-            )
 
     try:
         # Step 1: Transcribe the audio (now using injected service)
         logger.info(
-            f"Transcribing audio with provider={stt_provider or 'default'}, language={language or 'auto-detect'}"
+            f"Transcribing audio, language={language or 'auto-detect'}"
         )
-        transcription_result = await voice_service.get_transcription(
+        transcription_result = await sst_service.transcribe(
             audio_file=audio_file,
             language=language,
-            provider=stt_provider,
-            translate_to_english=False,  # We'll handle translation separately
         )
-
-        text = transcription_result["text"]
-        detected_language = transcription_result["language_detected"]
 
         logger.info(
-            f"Transcription completed: '{text[:100]}...' (language={detected_language or 'unknown'})"
+            f"Transcription completed: '{transcription_result.text[:100]}...' (language={language or 'unknown'})"
         )
-
-        # Step 2: Translate if not in English (now using injected service)
-        translated_text = text
-        if detected_language and detected_language.lower() not in [
-            "en",
-            "eng",
-            "en-us",
-            "english",
-        ]:
-            logger.info(f"Translating from {detected_language} to English")
-            translated_text = await llm_service.translate_text(
-                text, language or detected_language
-            )
-            logger.info(f"Translation completed: '{translated_text[:100]}...'")
-        else:
-            logger.info("No translation needed (already in English)")
 
         # Step 3: Parse the text into a quest (now using injected service)
         logger.info("Parsing text into quest structure")
-        quest_in = await llm_service.parse_quest_from_text(translated_text)
+        try:
+          quest_in = await llm_service.parse_quest_from_text(transcription_result.text, language, 'Argentina')
+        except ValueError as e:
+          logger.error(f"Error parsing quest from text: {str(e)}", exc_info=True)
+          raise HTTPException(
+              status_code=500,
+              detail="We couldn't turn your voice into a quest",
+          )
+        
         logger.info(
             f"Parsed quest: '{quest_in.title}' (type={quest_in.quest_type.value}, rarity={quest_in.rarity.value})"
         )
@@ -327,11 +300,9 @@ async def suggest_quest_from_voice(
     db: Session = Depends(deps.get_db),
     audio_file: UploadFile = File(...),
     language: Optional[str] = Form(None),
-    stt_provider: Optional[str] = Form(None),
     current_user: models.User = Depends(deps.get_current_active_user),
-    voice_service: VoiceQuestService = Depends(get_voice_quest_service),
+    sst_service: BaseSTTService = Depends(get_stt_service),
     llm_service: LLMService = Depends(get_llm_service),
-    stt_factory: STTServiceFactory = Depends(get_stt_factory),
 ) -> Any:
     """
     Create a new quest from voice input.
@@ -364,61 +335,28 @@ async def suggest_quest_from_voice(
             detail=f"Unsupported audio format: {audio_file.content_type}. Supported formats: WAV, MP3, WebM, OGG, M4A",
         )
 
-    # Check if specified provider is available
-    if stt_provider:
-        available_providers = stt_factory.get_available_providers()
-        if (
-            stt_provider not in available_providers
-            or not available_providers[stt_provider]
-        ):
-            raise HTTPException(
-                status_code=400,
-                detail=f"Requested STT provider '{stt_provider}' is not configured. Available providers: {[p for p, available in available_providers.items() if available]}",
-            )
-
     try:
-        # Step 1: Transcribe the audio (now using injected service)
+        # Step 1: Transcribe the audio 
         logger.info(
-            f"Transcribing audio with provider={stt_provider or 'default'}, language={language or 'auto-detect'}"
+            f"Transcribing audio, language={language or 'auto-detect'}"
         )
-        transcription_result = await voice_service.get_transcription(
+        transcription_result = await sst_service.transcribe(
             audio_file=audio_file,
             language=language,
-            provider=stt_provider,
-            translate_to_english=False,  # We'll handle translation separately
         )
-
-        text = transcription_result["text"]
-        detected_language = transcription_result["language_detected"]
 
         logger.info(
-            f"Transcription completed: '{text[:100]}...' (language={detected_language or 'unknown'})"
+            f"Transcription completed: '{transcription_result.text[:100]}...' "
         )
 
-        # Step 2: Translate if not in English (now using injected service)
-        translated_text = text
-        if detected_language and detected_language.lower() not in [
-            "en",
-            "eng",
-            "en-us",
-            "english",
-        ]:
-            logger.info(f"Translating from {detected_language} to English")
-            translated_text = await llm_service.translate_text(
-                text, language or detected_language
-            )
-            logger.info(f"Translation completed: '{translated_text[:100]}...'")
-        else:
-            logger.info("No translation needed (already in English)")
-
-        # Step 3: Parse the text into a quest (now using injected service)
+        # Step 2: Parse the text into a quest 
         logger.info("Parsing text into quest structure")
-        quest_in = await llm_service.parse_quest_from_text(translated_text)
+        quest_in = await llm_service.parse_quest_from_text(transcription_result.text, language, 'Argentina')
         logger.info(
             f"Parsed quest: '{quest_in.title}' (type={quest_in.quest_type.value}, rarity={quest_in.rarity.value})"
         )
 
-        # Step 4: Calculate exp reward based on quest properties
+        # Step 3: Calculate exp reward based on quest properties
         quest_in.exp_reward = gamification_service.calculate_quest_exp_reward(
             rarity=quest_in.rarity,
             quest_type=quest_in.quest_type,

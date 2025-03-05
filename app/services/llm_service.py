@@ -187,10 +187,13 @@ class LLMService:
         system_prompt = f"""
         You are a helpful assistant that extracts structured task information from user voice commands. Convert the user's voice command into a properly formatted quest object.
 
-        The values of the task fields must match the user's language. input language must match output language. meaning english input = english output, spanish input = spanish output.
-        It's important to take into account the user's country in order to properly interpret its text. For example, Argentinian spanish is not the same as Mexican spanish.
-
+        CRITICAL INFORMATION: The values of the task fields must match the user's language. input language must match output language. meaning english input = english output, spanish input = spanish output.
+        CRITICAL INFORMATION: It's important to take into account the user's country in order to properly interpret its text. For example, Argentinian spanish is not the same as Mexican spanish.
+        CRITICAL INFORMATION: due dates must computed relative to the current date and time (Current date in ISO format: {current_time_iso})
+        CRITICAL INFORMATION: if a date is provided, but not a specific time. then automatically set it to 23:59:59 (hh:mm:ss)
         
+        User's language: {language}
+        User's country: {country}
         Current day: {current_time.weekday()} (0: Monday, 1: Tuesday, 2: Wednesday, 3: Thursday, 4: Friday, 5: Saturday, 6: Sunday)
         Current Date: {current_time.strftime('%Y-%m-%d')}
         Current date in ISO format: {current_time_iso}
@@ -198,8 +201,7 @@ class LLMService:
         Current Day of Month: {current_time.day}
         Current Month: {current_time.month}
         Current Year: {current_time.year}
-        Detect language of user's input: {language}
-        User's country: {country}
+
 
 
         # Date Calculation Helper:
@@ -215,16 +217,6 @@ class LLMService:
         - For "in X days" use: {(current_time + timedelta(days=3)).strftime('%Y-%m-%d')} (example for "in 3 days")
         - For "next month" use: {next_month(current_time)}
         - For "end of month" use: {end_of_month(current_time)}
-
-
-        # Time Calculation: (examples in english. actual output must match user's language)
-        - If user specifies a time (e.g., "3 pm", "15:00"), use that time in 24-hour format
-        - If user says "morning" without specific time, use 09:00:00
-        - If user says "afternoon" without specific time, use 14:00:00
-        - If user says "evening" without specific time, use 19:00:00
-        - If user says "night" without specific time, use 20:00:00
-        - If no time is specified at all, use 23:59:59
-        - Always format final due_date as: YYYY-MM-DDTHH:MM:SSZ
 
         Extract the following fields:
         - title: The main task description (required). Keep it very short and concise (3-6 words). Do not include dates/times here.
@@ -270,20 +262,16 @@ class LLMService:
                 getattr(settings, "OPENROUTER_PARSING_MODEL", None)
                 or self.provider.default_model
             )
-            print('asca llega 1')
             response = await self.call_llm_api(
                 prompt=f"Convert this voice command to a quest: {text}",
                 system_prompt=system_prompt,
                 json_response=True,
                 model=model,
             )
-            print('asca llega 2')
             
-            print(response)
             # Parse the JSON response
+            print(response)
             quest_data = json.loads(response)
-            print(quest_data)
-
 
             # Safely handle enum conversions with case insensitivity
             if "rarity" in quest_data:
@@ -300,20 +288,10 @@ class LLMService:
 
             # Ensure due_date is parsed as UTC datetime or None
             if "due_date" in quest_data:
-                due_date_value = quest_data["due_date"]
-                if due_date_value is None:
-                    quest_data["due_date"] = None
-                else:
-                    try:
-                        # Parse ISO string and ensure UTC timezone
-                        parsed_date = datetime.fromisoformat(due_date_value.replace('Z', '+00:00'))
-                        if not parsed_date.tzinfo:
-                            parsed_date = parsed_date.replace(tzinfo=timezone.utc)
-                        else:
-                            parsed_date = parsed_date.astimezone(timezone.utc)
-                        quest_data["due_date"] = parsed_date
-                    except (ValueError, TypeError):
-                        del quest_data["due_date"]
+              try:
+                  quest_data["due_date"] = datetime.fromisoformat(quest_data["due_date"])
+              except (ValueError, TypeError):
+                  del quest_data["due_date"]
 
             # Create and return QuestCreate object
             return QuestCreate(**quest_data)

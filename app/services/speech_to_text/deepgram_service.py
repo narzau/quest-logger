@@ -25,13 +25,12 @@ class DeepgramSTTService(BaseSTTService):
         # The SDK automatically reads from DEEPGRAM_API_KEY environment variable
         # We can also pass it explicitly if needed
         self.client = DeepgramClient(api_key=settings.DEEPGRAM_API_KEY)
-        self.model = getattr(settings, "DEEPGRAM_MODEL", "nova-2")
+        self.model = getattr(settings, "DEEPGRAM_MODEL", "nova-3")
 
     async def transcribe(
         self,
         audio_file: UploadFile,
-        language: Optional[str] = None,
-        translate_to_english: bool = False,
+        language: Optional[str] = 'es',
     ) -> TranscriptionResult:
         """
         Transcribe audio using Deepgram SDK
@@ -60,19 +59,19 @@ class DeepgramSTTService(BaseSTTService):
                 punctuate=True,
                 diarize=False,
                 utterances=False,
+                language='en',
                 detect_language=True if not language else False,
             )
 
-            # Add language if specified
-            if language:
-                options.language = language
-
+        
             # Call Deepgram API
-            response = self.client.listen.rest.v("1").transcribe_file(payload, options)
+            print(options)
+            
+            response = self.client.listen.rest.v("1").transcribe_file(payload, options, timeout=60)
 
             # Extract results from response
             results = response.results
-
+            print(results, 'results deep ram')
             # Get the channels data (we'll use the first channel)
             if not results.channels or len(results.channels) == 0:
                 return TranscriptionResult(text="", raw_response=results.to_dict())
@@ -88,13 +87,6 @@ class DeepgramSTTService(BaseSTTService):
             # Extract transcript text
             transcript = alternative.transcript
 
-            # Get detected language
-            detected_language = None
-            if hasattr(alternative, "language") and alternative.language:
-                detected_language = alternative.language
-            elif language:
-                detected_language = language
-
             # Get confidence score
             confidence = (
                 alternative.confidence if hasattr(alternative, "confidence") else None
@@ -102,7 +94,7 @@ class DeepgramSTTService(BaseSTTService):
 
             return TranscriptionResult(
                 text=transcript,
-                language_detected=detected_language,
+                language=language,
                 confidence=confidence,
                 translation=None,  # No translation from Deepgram
                 raw_response=results.to_dict(),

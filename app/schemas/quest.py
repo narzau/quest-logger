@@ -1,5 +1,5 @@
 # app/schemas/quest.py
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Optional
 from pydantic import BaseModel
 
@@ -10,15 +10,13 @@ from app.models.quest import QuestRarity, QuestType
 class QuestBase(BaseModel):
     title: str
     description: Optional[str] = None
-    due_date: Optional[datetime] = None
     rarity: QuestRarity = QuestRarity.COMMON
     quest_type: QuestType = QuestType.REGULAR
     priority: int = 1
     exp_reward: int = 10
     parent_quest_id: Optional[int] = None
     tracked: bool = True
-
-
+    due_date: Optional[datetime] = datetime.now(timezone.utc).replace(hour=23, minute=59, second=59)
 # Properties to receive on quest creation
 class QuestCreate(QuestBase):
     pass
