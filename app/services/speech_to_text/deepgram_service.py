@@ -30,7 +30,7 @@ class DeepgramSTTService(BaseSTTService):
     async def transcribe(
         self,
         audio_file: UploadFile,
-        language: Optional[str] = 'es',
+        language: Optional[str],
     ) -> TranscriptionResult:
         """
         Transcribe audio using Deepgram SDK
@@ -59,7 +59,7 @@ class DeepgramSTTService(BaseSTTService):
                 punctuate=True,
                 diarize=False,
                 utterances=False,
-                language='en',
+                language='en', # hardcoded for now as the 'nova-3' model doesn't support any other languages as of today. 2023-03-05
                 detect_language=True if not language else False,
             )
 

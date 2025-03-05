@@ -188,12 +188,10 @@ class LLMService:
         You are a helpful assistant that extracts structured task information from user voice commands. Convert the user's voice command into a properly formatted quest object.
 
         CRITICAL INFORMATION: The values of the task fields must match the user's language. input language must match output language. meaning english input = english output, spanish input = spanish output.
-        CRITICAL INFORMATION: It's important to take into account the user's country in order to properly interpret its text. For example, Argentinian spanish is not the same as Mexican spanish.
         CRITICAL INFORMATION: due dates must computed relative to the current date and time (Current date in ISO format: {current_time_iso})
         CRITICAL INFORMATION: if a date is provided, but not a specific time. then automatically set it to 23:59:59 (hh:mm:ss)
         
         User's language: {language}
-        User's country: {country}
         Current day: {current_time.weekday()} (0: Monday, 1: Tuesday, 2: Wednesday, 3: Thursday, 4: Friday, 5: Saturday, 6: Sunday)
         Current Date: {current_time.strftime('%Y-%m-%d')}
         Current date in ISO format: {current_time_iso}
