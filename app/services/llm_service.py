@@ -138,35 +138,130 @@ class LLMService:
 
         return translation
 
-    async def parse_quest_from_text(self, text: str) -> QuestCreate:
+    # app/services/llm_service.py
+    async def parse_quest_from_text(self, text: str, language: Optional[str], country: str) -> QuestCreate:
         """
         Use an LLM to parse a quest from text input
 
         Args:
             text: The text to parse into a quest structure
+            language: Detected language of the input text
+            country: User's country for cultural context
 
         Returns:
             QuestCreate object with structured quest data
         """
-        system_prompt = """
-        You are a helpful assistant that extracts structured task information from user voice commands.
-        Convert the user's voice command into a properly formatted quest object.
+        from datetime import datetime, timezone, timedelta
+        import calendar
+
+        current_time = datetime.now(timezone.utc)
+        current_time_iso = current_time.replace(microsecond=0).isoformat()
+
+        # Helper functions for date calculations
+        def next_weekday(current_date, weekday):
+            """Find the next occurrence of a specific weekday"""
+            days_ahead = weekday - current_date.weekday()
+            if days_ahead <= 0:  # Target day already happened this week
+                days_ahead += 7
+            return (current_date + timedelta(days=days_ahead)).strftime('%Y-%m-%d')
         
+        def this_weekday(current_date, weekday):
+            """Find this week's occurrence of a specific weekday"""
+            days_ahead = weekday - current_date.weekday()
+            if days_ahead < 0:  # Target day already happened this week
+                days_ahead += 7
+            return (current_date + timedelta(days=days_ahead)).strftime('%Y-%m-%d')
+        
+        def next_month(current_date):
+            """Get the first day of next month"""
+            if current_date.month == 12:
+                return f"{current_date.year + 1}-01-01"
+            else:
+                return f"{current_date.year}-{current_date.month + 1:02d}-01"
+        
+        def end_of_month(current_date):
+            """Get the last day of current month"""
+            last_day = calendar.monthrange(current_date.year, current_date.month)[1]
+            return f"{current_date.year}-{current_date.month:02d}-{last_day}"
+
+        system_prompt = f"""
+        You are a helpful assistant that extracts structured task information from user voice commands. Convert the user's voice command into a properly formatted quest object.
+
+        The values of the task fields must match the user's language. input language must match output language. meaning english input = english output, spanish input = spanish output.
+        It's important to take into account the user's country in order to properly interpret its text. For example, Argentinian spanish is not the same as Mexican spanish.
+
+        
+        Current day: {current_time.weekday()} (0: Monday, 1: Tuesday, 2: Wednesday, 3: Thursday, 4: Friday, 5: Saturday, 6: Sunday)
+        Current Date: {current_time.strftime('%Y-%m-%d')}
+        Current date in ISO format: {current_time_iso}
+        Current Time (UTC): {current_time.strftime('%H:%M:%S')}
+        Current Day of Month: {current_time.day}
+        Current Month: {current_time.month}
+        Current Year: {current_time.year}
+        Detect language of user's input: {language}
+        User's country: {country}
+
+
+        # Date Calculation Helper:
+        - For "today" use: {current_time.strftime('%Y-%m-%d')}
+        - For "tomorrow" use: {(current_time + timedelta(days=1)).strftime('%Y-%m-%d')}
+        - For "next Monday" use: {next_weekday(current_time, 0)}
+        - For "next Tuesday" use: {next_weekday(current_time, 1)}
+        - For "next Wednesday" use: {next_weekday(current_time, 2)}
+        - For "next Thursday" use: {next_weekday(current_time, 3)}
+        - For "next Friday" use: {next_weekday(current_time, 4)}
+        - For "next Saturday" use: {next_weekday(current_time, 5)}
+        - For "next Sunday" use: {next_weekday(current_time, 6)}
+        - For "in X days" use: {(current_time + timedelta(days=3)).strftime('%Y-%m-%d')} (example for "in 3 days")
+        - For "next month" use: {next_month(current_time)}
+        - For "end of month" use: {end_of_month(current_time)}
+
+
+        # Time Calculation: (examples in english. actual output must match user's language)
+        - If user specifies a time (e.g., "3 pm", "15:00"), use that time in 24-hour format
+        - If user says "morning" without specific time, use 09:00:00
+        - If user says "afternoon" without specific time, use 14:00:00
+        - If user says "evening" without specific time, use 19:00:00
+        - If user says "night" without specific time, use 20:00:00
+        - If no time is specified at all, use 23:59:59
+        - Always format final due_date as: YYYY-MM-DDTHH:MM:SSZ
+
         Extract the following fields:
-        - title: The main task description (required)
-        - description: Additional details about the task (optional)
-        - due_date: When the task is due in ISO format (optional)
-        - rarity: The importance/complexity of the task (common, uncommon, rare, epic, legendary)
-        - quest_type: The type of task (daily, regular, epic, boss)
-        - priority: Numeric priority from 1 (low) to 5 (high)
+        - title: The main task description (required). Keep it very short and concise (3-6 words). Do not include dates/times here.
+        - description: Additional details about the task (optional).
+        - due_date: The due date and time in ISO 8601 format (YYYY-MM-DDTHH:MM:SSZ), computed relative to the current date and time. Follow the date calculation guide above.
+        - rarity: Importance/complexity (common, uncommon, rare, epic, legendary). Default: common.
+        - quest_type: Type (daily, regular, epic, boss). Default: regular.
+        - priority: Numeric priority from 1 (low) to 100 (high). Default: 33. Higher if urgent.
+
+        These extracted fields values must respect the original language of the user's input.
+
+        Examples: (if today was 2025-03-05, which is a Wednesday)
         
-        Default values if not specified:
-        - rarity: common
-        - quest_type: regular
-        - priority: 1
-        - due_date: null
+        User says: "El viernes tengo que llevar a mi gato al veterinario. Turno a las 11 am"
+        {{
+          "title": "Llevar gato al veterinario",
+          "description": "El viernes tengo que turno a las 11 AM para llevar a mi gato al veterinario.",
+          "due_date": "2025-03-7T11:00:00Z",
+          "rarity": "common",
+          "quest_type": "regular",
+          "priority": 2
+        }}
+
+        User says: "I have a dentist appointment next Monday at 11 am."
+        {{
+          "title": "Dentist appointment",
+          "description": "I have a dentist appointment next Monday at 11 am",
+          "due_date": "2025-03-10T11:00:00Z",
+          "rarity": "common",
+          "quest_type": "regular",
+          "priority": 2
+        }}
         
-        Return only valid JSON without any explanation or additional text.
+
+        The values of the fields must be generated based on the user's language. input language must match output language. meaning english input = english output. spanish input = spanish output.
+        Return valid JSON only. Do not include comments in the JSON response. No explanations. 
+        In case there is not enough information to extract the required fields, ONLY THEN it's acceptable to provide a non-valid JSON response.
         """
 
         try:
@@ -175,38 +270,57 @@ class LLMService:
                 getattr(settings, "OPENROUTER_PARSING_MODEL", None)
                 or self.provider.default_model
             )
-
+            print('asca llega 1')
             response = await self.call_llm_api(
                 prompt=f"Convert this voice command to a quest: {text}",
                 system_prompt=system_prompt,
                 json_response=True,
                 model=model,
             )
-
+            print('asca llega 2')
+            
+            print(response)
             # Parse the JSON response
             quest_data = json.loads(response)
+            print(quest_data)
 
-            # Map string values to enums if needed
+
+            # Safely handle enum conversions with case insensitivity
             if "rarity" in quest_data:
-                quest_data["rarity"] = QuestRarity(quest_data["rarity"])
+                try:
+                    quest_data["rarity"] = QuestRarity(quest_data["rarity"].lower())
+                except (ValueError, KeyError):
+                    quest_data["rarity"] = QuestRarity.COMMON
+
             if "quest_type" in quest_data:
-                quest_data["quest_type"] = QuestType(quest_data["quest_type"])
+                try:
+                    quest_data["quest_type"] = QuestType(quest_data["quest_type"].lower())
+                except (ValueError, KeyError):
+                    quest_data["quest_type"] = QuestType.REGULAR
+
+            # Ensure due_date is parsed as UTC datetime or None
+            if "due_date" in quest_data:
+                due_date_value = quest_data["due_date"]
+                if due_date_value is None:
+                    quest_data["due_date"] = None
+                else:
+                    try:
+                        # Parse ISO string and ensure UTC timezone
+                        parsed_date = datetime.fromisoformat(due_date_value.replace('Z', '+00:00'))
+                        if not parsed_date.tzinfo:
+                            parsed_date = parsed_date.replace(tzinfo=timezone.utc)
+                        else:
+                            parsed_date = parsed_date.astimezone(timezone.utc)
+                        quest_data["due_date"] = parsed_date
+                    except (ValueError, TypeError):
+                        del quest_data["due_date"]
 
             # Create and return QuestCreate object
             return QuestCreate(**quest_data)
 
         except Exception as e:
-            # Handle parsing errors
-            # For simplicity, create a basic quest if parsing fails
-            return QuestCreate(
-                title=f"New Quest: {text[:50]}{'...' if len(text) > 50 else ''}",
-                description=text,
-                rarity=QuestRarity.COMMON,
-                quest_type=QuestType.REGULAR,
-                priority=1,
-            )
-
-
+            raise ValueError(f"Error parsing quest from text: {e}")
+          
 def get_llm_service() -> LLMService:
     """
     Provides an LLMService instance for dependency injection.
