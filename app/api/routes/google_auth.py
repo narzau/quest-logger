@@ -5,13 +5,10 @@ from fastapi.responses import RedirectResponse, HTMLResponse
 from sqlalchemy.orm import Session
 from app.api import deps
 from app import models
-from app.services.google_ouath_service import create_oauth_flow
-from app.core.config import settings
+from app.services.google_ouath_service import create_oauth_flow, refresh_google_token, get_google_credentials, create_calendar_service
 import datetime
 import logging
 import secrets
-import json
-from jose import jwt
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -179,17 +176,6 @@ async def oauth_error(error: str = "unknown_error"):
     return Response(content=html_content, media_type="text/html")
 
 
-@router.get("/status")
-def google_auth_status(
-    current_user: models.User = Depends(deps.get_current_active_user),
-):
-    """Check if user has connected Google Calendar."""
-    return {
-        "connected": current_user.google_token is not None,
-        "expires_at": current_user.google_token_expiry,
-    }
-
-
 @router.delete("/disconnect")
 def disconnect_google(
     db: Session = Depends(deps.get_db),
@@ -205,3 +191,59 @@ def disconnect_google(
     db.commit()
 
     return {"success": True, "message": "Google Calendar disconnected successfully"}
+
+@router.get("/status")
+def google_connection_status(
+    db: Session = Depends(deps.get_db),
+    current_user: models.User = Depends(deps.get_current_active_user),
+):
+    """Check Google Calendar connection status and health."""
+    if not current_user.google_token:
+        return {
+            "connected": False,
+            "status": "not_connected",
+            "message": "Not connected to Google Calendar"
+        }
+        
+    # Check if token is expired
+    if current_user.google_token_expiry and current_user.google_token_expiry < datetime.utcnow():
+        # Try to refresh token
+        if current_user.google_refresh_token:
+            success = refresh_google_token(db, current_user)
+            if not success:
+                return {
+                    "connected": False,
+                    "status": "refresh_failed",
+                    "message": "Token expired and refresh failed",
+                    "expired_at": current_user.google_token_expiry.isoformat()
+                }
+        else:
+            return {
+                "connected": False,
+                "status": "expired_no_refresh",
+                "message": "Token expired and no refresh token available",
+                "expired_at": current_user.google_token_expiry.isoformat()
+            }
+    
+    # Test connection with a simple API call
+    try:
+        credentials = get_google_credentials(current_user, db)
+        service = create_calendar_service(credentials)
+        
+        # Get calendar list (lightweight test)
+        calendar_list = service.calendarList().list(maxResults=1).execute()
+        
+        return {
+            "connected": True,
+            "status": "active",
+            "message": "Google Calendar connection is active",
+            "expires_at": current_user.google_token_expiry.isoformat() if current_user.google_token_expiry else None,
+            "calendar_count": len(calendar_list.get('items', []))
+        }
+    except Exception as e:
+        logger.error(f"Error testing Google connection: {e}")
+        return {
+            "connected": False,
+            "status": "error",
+            "message": f"Error testing connection: {str(e)}"
+        }

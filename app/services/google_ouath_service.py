@@ -1,9 +1,13 @@
 # app/services/google_oauth_service.py
+from fastapi import Request
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import Flow
 from googleapiclient.discovery import build
 from app.core.config import settings
 from datetime import datetime
+from sqlalchemy.orm import Session
+from app import models
+
 import json
 import os
 import tempfile
@@ -42,14 +46,20 @@ def create_oauth_flow():
         logger.error(f"Error creating OAuth flow from JSON string: {e}")
         raise
 
-def get_google_credentials(user):
-    """Get Google OAuth credentials for a user."""
+def get_google_credentials(user: models.User, db: Session = None):
+    """Get Google OAuth credentials for a user, refreshing if needed."""
     if not user.google_token:
         return None
     
-    # Check if token is expired
-    if user.google_token_expiry and user.google_token_expiry < datetime.utcnow():
-        logger.warning(f"Google token expired for user {user.id}")
+    # Check if token is expired and needs refresh
+    token_expired = (user.google_token_expiry and user.google_token_expiry < datetime.utcnow())
+    
+    if token_expired and db and user.google_refresh_token:
+        success = refresh_google_token(db, user)
+        if not success:
+            return None
+    elif token_expired:
+        logger.warning(f"Token expired for user {user.id} but no DB session to refresh")
         return None
         
     # Extract client ID and secret from the JSON
@@ -75,6 +85,48 @@ def get_google_credentials(user):
         client_secret=client_secret,
         scopes=["https://www.googleapis.com/auth/calendar"]
     )
+    
+def refresh_google_token(db: Session, user: models.User):
+    """Refresh an expired Google OAuth token."""
+    if not user.google_refresh_token:
+        logger.warning(f"No refresh token available for user {user.id}")
+        return False
+        
+    try:
+        # Extract client ID and secret from the JSON
+        client_secrets = json.loads(settings.GOOGLE_CLIENT_SECRETS_JSON)
+        web_config = client_secrets.get('web', {})
+        client_id = web_config.get('client_id')
+        client_secret = web_config.get('client_secret')
+        
+        if not client_id or not client_secret:
+            logger.error("Missing client_id or client_secret in GOOGLE_CLIENT_SECRETS_JSON")
+            return False
+        
+        # Create credentials with refresh token
+        credentials = Credentials(
+            token=None,  # Token is expired or missing
+            refresh_token=user.google_refresh_token,
+            token_uri="https://oauth2.googleapis.com/token",
+            client_id=client_id,
+            client_secret=client_secret,
+            scopes=["https://www.googleapis.com/auth/calendar"]
+        )
+        
+        # Refresh the token
+        credentials.refresh(Request())
+        
+        # Update user record with new token
+        user.google_token = credentials.token
+        user.google_token_expiry = datetime.fromtimestamp(credentials.expiry)
+        db.add(user)
+        db.commit()
+        
+        logger.info(f"Successfully refreshed Google token for user {user.id}")
+        return True
+    except Exception as e:
+        logger.error(f"Error refreshing token for user {user.id}: {e}")
+        return False
 
 def create_calendar_service(credentials):
     """Create a Google Calendar service."""

@@ -13,12 +13,12 @@ logger = logging.getLogger(__name__)
 
 
 def create_calendar_event(db: Session, user: models.User, quest: models.Quest):
-    """Create a Google Calendar event for a quest with enhanced visibility and debugging."""
+    """Create a Google Calendar event for a quest."""
     if not user.google_token:
         logger.warning(f"User {user.id} has no Google token")
         return None
 
-    credentials = get_google_credentials(user)
+    credentials = get_google_credentials(user, db)
     if not credentials:
         logger.warning(f"Could not get valid credentials for user {user.id}")
         return None
