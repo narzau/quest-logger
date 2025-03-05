@@ -29,15 +29,13 @@ class VoiceQuestService:
         Get just the transcription without creating a quest
 
         Useful for debugging or providing a preview
-        """    
-        stt_service = STTServiceFactory.create() # uses default provider from
+        """
+        stt_service = STTServiceFactory.create()  # uses default provider from
 
         # Transcribe the audio (no translation yet)
         transcription = await stt_service.transcribe(
-            audio_file=audio_file,
-            language=language
+            audio_file=audio_file, language=language
         )
-
 
         return {
             "text": transcription.text,

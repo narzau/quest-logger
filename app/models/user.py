@@ -1,4 +1,4 @@
-from sqlalchemy import Boolean, Column, Integer, String
+from sqlalchemy import Boolean, Column, DateTime, Integer, String
 from sqlalchemy.orm import relationship
 
 from app.db.base import Base
@@ -16,6 +16,12 @@ class User(Base):
     # Gamification stats
     level = Column(Integer, default=1)
     experience = Column(Integer, default=0)
+
+    # Google
+    google_token = Column(String, nullable=True)
+    google_refresh_token = Column(String, nullable=True)
+    google_token_expiry = Column(DateTime, nullable=True)
+    google_oauth_state = Column(String, nullable=True)
 
     # Relationships
     quests = relationship("Quest", back_populates="owner")

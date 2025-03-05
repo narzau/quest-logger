@@ -47,6 +47,7 @@ class Quest(Base):
     parent_quest_id = Column(Integer, ForeignKey("quests.id"), nullable=True)
     completed_at = Column(DateTime, nullable=True)
     tracked = Column(Boolean, default=True)
+    google_calendar_event_id = Column(String, nullable=True)
 
     # Relationships
     owner = relationship("User", back_populates="quests")

@@ -59,19 +59,20 @@ class DeepgramSTTService(BaseSTTService):
                 punctuate=True,
                 diarize=False,
                 utterances=False,
-                language='en', # hardcoded for now as the 'nova-3' model doesn't support any other languages as of today. 2023-03-05
+                language="en",  # hardcoded for now as the 'nova-3' model doesn't support any other languages as of today. 2023-03-05
                 detect_language=True if not language else False,
             )
 
-        
             # Call Deepgram API
             print(options)
-            
-            response = self.client.listen.rest.v("1").transcribe_file(payload, options, timeout=60)
+
+            response = self.client.listen.rest.v("1").transcribe_file(
+                payload, options, timeout=60
+            )
 
             # Extract results from response
             results = response.results
-            print(results, 'results deep ram')
+            print(results, "results deep ram")
             # Get the channels data (we'll use the first channel)
             if not results.channels or len(results.channels) == 0:
                 return TranscriptionResult(text="", raw_response=results.to_dict())

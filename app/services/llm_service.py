@@ -139,7 +139,9 @@ class LLMService:
         return translation
 
     # app/services/llm_service.py
-    async def parse_quest_from_text(self, text: str, language: Optional[str], country: str) -> QuestCreate:
+    async def parse_quest_from_text(
+        self, text: str, language: Optional[str], country: str
+    ) -> QuestCreate:
         """
         Use an LLM to parse a quest from text input
 
@@ -163,22 +165,22 @@ class LLMService:
             days_ahead = weekday - current_date.weekday()
             if days_ahead <= 0:  # Target day already happened this week
                 days_ahead += 7
-            return (current_date + timedelta(days=days_ahead)).strftime('%Y-%m-%d')
-        
+            return (current_date + timedelta(days=days_ahead)).strftime("%Y-%m-%d")
+
         def this_weekday(current_date, weekday):
             """Find this week's occurrence of a specific weekday"""
             days_ahead = weekday - current_date.weekday()
             if days_ahead < 0:  # Target day already happened this week
                 days_ahead += 7
-            return (current_date + timedelta(days=days_ahead)).strftime('%Y-%m-%d')
-        
+            return (current_date + timedelta(days=days_ahead)).strftime("%Y-%m-%d")
+
         def next_month(current_date):
             """Get the first day of next month"""
             if current_date.month == 12:
                 return f"{current_date.year + 1}-01-01"
             else:
                 return f"{current_date.year}-{current_date.month + 1:02d}-01"
-        
+
         def end_of_month(current_date):
             """Get the last day of current month"""
             last_day = calendar.monthrange(current_date.year, current_date.month)[1]
@@ -266,7 +268,7 @@ class LLMService:
                 json_response=True,
                 model=model,
             )
-            
+
             # Parse the JSON response
             print(response)
             quest_data = json.loads(response)
@@ -280,23 +282,28 @@ class LLMService:
 
             if "quest_type" in quest_data:
                 try:
-                    quest_data["quest_type"] = QuestType(quest_data["quest_type"].lower())
+                    quest_data["quest_type"] = QuestType(
+                        quest_data["quest_type"].lower()
+                    )
                 except (ValueError, KeyError):
                     quest_data["quest_type"] = QuestType.REGULAR
 
             # Ensure due_date is parsed as UTC datetime or None
             if "due_date" in quest_data:
-              try:
-                  quest_data["due_date"] = datetime.fromisoformat(quest_data["due_date"])
-              except (ValueError, TypeError):
-                  del quest_data["due_date"]
+                try:
+                    quest_data["due_date"] = datetime.fromisoformat(
+                        quest_data["due_date"]
+                    )
+                except (ValueError, TypeError):
+                    del quest_data["due_date"]
 
             # Create and return QuestCreate object
             return QuestCreate(**quest_data)
 
         except Exception as e:
             raise ValueError(f"Error parsing quest from text: {e}")
-          
+
+
 def get_llm_service() -> LLMService:
     """
     Provides an LLMService instance for dependency injection.

@@ -57,4 +57,4 @@ def get_stt_service() -> BaseSTTService:
     """
     Provides an LLMService instance for dependency injection.
     """
-    return STTServiceFactory.create(provider='deepgram')
+    return STTServiceFactory.create(provider="deepgram")

@@ -108,4 +108,3 @@ async def get_supported_languages(
             {"code": "de", "name": "German"},
             {"code": "it", "name": "Italian"},
         ]
-

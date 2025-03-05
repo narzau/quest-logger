@@ -14,7 +14,7 @@ class Settings(BaseSettings):
 
     # Server settings
     SERVER_NAME: str = "localhost"
-    SERVER_HOST: AnyHttpUrl = "http://localhost:8000"
+    SERVER_HOST: str = "http://localhost:8000"
     # CORS settings
     BACKEND_CORS_ORIGINS: List[str] = [
         "http://localhost",
@@ -60,6 +60,11 @@ class Settings(BaseSettings):
     ENABLE_LLM_FEATURES: bool = True
     ENABLE_VOICE_FEATURES: bool = True
     ENABLE_TRANSLATION: bool = True
+
+    # Google
+    GOOGLE_CLIENT_ID: str = ""
+    GOOGLE_CLIENT_SECRET: str = ""
+    GOOGLE_CLIENT_SECRETS_JSON: str = ""
 
     # Use SettingsConfigDict instead of Config class
     model_config = SettingsConfigDict(
