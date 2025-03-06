@@ -16,7 +16,6 @@ class QuestBase(BaseModel):
     exp_reward: int = 10
     parent_quest_id: Optional[int] = None
     tracked: bool = True
-    google_calendar: Optional[bool] = True
     due_date: Optional[datetime] = datetime.now(timezone.utc).replace(
         hour=23, minute=59, second=59
     )
@@ -24,7 +23,7 @@ class QuestBase(BaseModel):
 
 # Properties to receive on quest creation
 class QuestCreate(QuestBase):
-    pass
+  google_calendar: Optional[bool] = False
 
 
 # Properties to receive on quest update
@@ -39,7 +38,7 @@ class QuestInDBBase(QuestBase):
     is_completed: bool
     created_at: datetime
     owner_id: int
-
+    google_calendar_event_id: Optional[str] = None
     class Config:
         from_attributes = True
 

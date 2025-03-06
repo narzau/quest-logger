@@ -1,10 +1,10 @@
 # app/services/google_oauth_service.py
-from fastapi import Request
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import Flow
+from google.auth.transport.requests import Request  # Changed import
 from googleapiclient.discovery import build
 from app.core.config import settings
-from datetime import datetime
+from datetime import datetime, timedelta
 from sqlalchemy.orm import Session
 from app import models
 
@@ -113,12 +113,16 @@ def refresh_google_token(db: Session, user: models.User):
             scopes=["https://www.googleapis.com/auth/calendar"]
         )
         
-        # Refresh the token
         credentials.refresh(Request())
         
-        # Update user record with new token
         user.google_token = credentials.token
-        user.google_token_expiry = datetime.fromtimestamp(credentials.expiry)
+        if isinstance(credentials.expiry, datetime):
+            user.google_token_expiry = credentials.expiry
+        elif isinstance(credentials.expiry, (int, float)):
+            user.google_token_expiry = datetime.fromtimestamp(credentials.expiry)
+        else:
+            logger.warning(f"Unexpected type for credentials.expiry: {type(credentials.expiry)}")
+            user.google_token_expiry = datetime.utcnow() + timedelta(hours=1)
         db.add(user)
         db.commit()
         

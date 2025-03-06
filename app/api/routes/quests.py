@@ -248,6 +248,7 @@ async def create_quest_from_voice(
     *,
     db: Session = Depends(deps.get_db),
     audio_file: UploadFile = File(...),
+    google_calendar: Optional[bool] = Form(False),
     language: Optional[str] = Form(None),
     current_user: models.User = Depends(deps.get_current_active_user),
     sst_service: BaseSTTService = Depends(get_stt_service),
@@ -296,7 +297,7 @@ async def create_quest_from_voice(
             f"Transcription completed: '{transcription_result.text[:100]}...' (language={language or 'unknown'})"
         )
 
-        # Step 3: Parse the text into a quest (now using injected service)
+        # Step 2: Parse the text into a quest (now using injected service)
         logger.info("Parsing text into quest structure")
         try:
             quest_in = await llm_service.parse_quest_from_text(
@@ -313,16 +314,16 @@ async def create_quest_from_voice(
             f"Parsed quest: '{quest_in.title}' (type={quest_in.quest_type.value}, rarity={quest_in.rarity.value})"
         )
 
-        # Step 4: Calculate exp reward based on quest properties
+        # Step 3: Calculate exp reward based on quest properties
         exp_reward = gamification_service.calculate_quest_exp_reward(
             rarity=quest_in.rarity,
             quest_type=quest_in.quest_type,
             priority=quest_in.priority,
         )
 
-        # Step 5: Create the quest
+        # Step 4: Create the quest
         quest = models.Quest(
-            **quest_in.model_dump(exclude={"exp_reward"}),
+            **quest_in.model_dump(exclude={"exp_reward", "google_calendar"}),
             owner_id=current_user.id,
             exp_reward=exp_reward,
         )
@@ -330,6 +331,22 @@ async def create_quest_from_voice(
         db.add(quest)
         db.commit()
         db.refresh(quest)
+
+        # Step 5: Create Google Calendar event if requested
+        if google_calendar and current_user.google_token:
+            try:
+                calendar_event_id = create_calendar_event(db, current_user, quest)
+                if calendar_event_id:
+                    print(
+                        f"Created Google Calendar event {calendar_event_id} for quest {quest.id}"
+                    )
+                    
+                else:
+                    print(f"Failed to create Google Calendar event for quest {quest.id}")
+            except Exception as e:
+                logger.error(
+                    f"Error creating Google Calendar event for quest {quest.id}: {e}"
+                )
 
         logger.info(f"Quest created successfully with ID {quest.id}")
         return quest

@@ -25,7 +25,7 @@ class DeepgramSTTService(BaseSTTService):
         # The SDK automatically reads from DEEPGRAM_API_KEY environment variable
         # We can also pass it explicitly if needed
         self.client = DeepgramClient(api_key=settings.DEEPGRAM_API_KEY)
-        self.model = getattr(settings, "DEEPGRAM_MODEL", "nova-3")
+        self.model = getattr(settings, "DEEPGRAM_MODEL", "nova-2")
 
     async def transcribe(
         self,
@@ -59,7 +59,7 @@ class DeepgramSTTService(BaseSTTService):
                 punctuate=True,
                 diarize=False,
                 utterances=False,
-                language="en",  # hardcoded for now as the 'nova-3' model doesn't support any other languages as of today. 2023-03-05
+                language=language,
                 detect_language=True if not language else False,
             )
 
