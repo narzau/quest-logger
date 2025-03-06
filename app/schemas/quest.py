@@ -23,7 +23,7 @@ class QuestBase(BaseModel):
 
 # Properties to receive on quest creation
 class QuestCreate(QuestBase):
-  google_calendar: Optional[bool] = False
+    google_calendar: Optional[bool] = False
 
 
 # Properties to receive on quest update
@@ -39,6 +39,7 @@ class QuestInDBBase(QuestBase):
     created_at: datetime
     owner_id: int
     google_calendar_event_id: Optional[str] = None
+
     class Config:
         from_attributes = True
 

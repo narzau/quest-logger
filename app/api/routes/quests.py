@@ -340,9 +340,11 @@ async def create_quest_from_voice(
                     print(
                         f"Created Google Calendar event {calendar_event_id} for quest {quest.id}"
                     )
-                    
+
                 else:
-                    print(f"Failed to create Google Calendar event for quest {quest.id}")
+                    print(
+                        f"Failed to create Google Calendar event for quest {quest.id}"
+                    )
             except Exception as e:
                 logger.error(
                     f"Error creating Google Calendar event for quest {quest.id}: {e}"
