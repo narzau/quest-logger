@@ -2,6 +2,7 @@
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, Query
 from fastapi.responses import RedirectResponse, HTMLResponse
+from datetime import datetime
 from sqlalchemy.orm import Session
 from app.api import deps
 from app import models
@@ -11,7 +12,6 @@ from app.services.google_ouath_service import (
     get_google_credentials,
     create_calendar_service,
 )
-import datetime
 import logging
 import secrets
 
@@ -214,7 +214,7 @@ def google_connection_status(
     # Check if token is expired
     if (
         current_user.google_token_expiry
-        and current_user.google_token_expiry < datetime.utcnow()
+        and current_user.google_token_expiry < datetime.now()
     ):
         # Try to refresh token
         if current_user.google_refresh_token:
