@@ -6,8 +6,6 @@ from app.api.routes import (
     users,
     quests,
     achievements,
-    voice,
-    llm_features,
     google_auth,
 )
 from app.core.config import settings
@@ -22,7 +20,3 @@ api_router.include_router(
 api_router.include_router(
     google_auth.router, prefix="/auth/google", tags=["google_auth"]
 )
-
-if settings.ENABLE_LLM_FEATURES:
-    api_router.include_router(voice.router, prefix="/voice", tags=["voice"])
-    api_router.include_router(llm_features.router, prefix="/llm", tags=["llm"])

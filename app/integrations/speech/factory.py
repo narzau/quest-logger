@@ -52,9 +52,3 @@ class STTServiceFactory:
 
         return available
 
-
-def get_stt_service() -> BaseSTTService:
-    """
-    Provides an LLMService instance for dependency injection.
-    """
-    return STTServiceFactory.create(provider="deepgram")

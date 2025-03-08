@@ -11,6 +11,8 @@ from app import models, schemas
 from app.core import security
 from app.core.config import settings
 from app.db.base import SessionLocal
+from app.services.quest_service import QuestService
+from app.services.google_calendar_service import GoogleCalendarService
 
 oauth2_scheme = OAuth2PasswordBearer(
     tokenUrl=f"{settings.API_V1_STR}/login/access-token"
@@ -50,3 +52,18 @@ def get_current_active_user(
     if not current_user.is_active:
         raise HTTPException(status_code=400, detail="Inactive user")
     return current_user
+
+
+
+def get_quest_service(db: Session = Depends(get_db)) -> QuestService:
+    """
+    Provides a QuestService instance with DB session.
+    """
+    return QuestService(db)
+  
+  
+def get_calendar_service(db: Session = Depends(get_db)) -> GoogleCalendarService:
+    """
+    Provides a QuestService instance with DB session.
+    """
+    return GoogleCalendarService(db)

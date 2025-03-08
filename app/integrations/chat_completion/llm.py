@@ -16,7 +16,7 @@ class LLMProvider(BaseModel):
     default_model: str
 
 
-class LLMService:
+class ChatCompletionService:
     """
     Service for interacting with LLMs through OpenRouter or OpenAI
     using the OpenAI SDK which works transparently with OpenRouter
@@ -302,10 +302,3 @@ class LLMService:
 
         except Exception as e:
             raise ValueError(f"Error parsing quest from text: {e}")
-
-
-def get_llm_service() -> LLMService:
-    """
-    Provides an LLMService instance for dependency injection.
-    """
-    return LLMService()

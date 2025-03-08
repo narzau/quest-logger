@@ -17,13 +17,8 @@ class User(Base):
     level = Column(Integer, default=1)
     experience = Column(Integer, default=0)
 
-    # Google
-    google_token = Column(String, nullable=True)
-    google_refresh_token = Column(String, nullable=True)
-    google_token_expiry = Column(DateTime, nullable=True)
-    google_oauth_state = Column(String, nullable=True)
-
     # Relationships
     quests = relationship("Quest", back_populates="owner")
     achievements = relationship("UserAchievement", back_populates="user")
     achievement_progress = relationship("UserAchievementProgress")
+    google_calendar_integration = relationship("GoogleCalendarIntegration", back_populates="user", cascade="all, delete-orphan")

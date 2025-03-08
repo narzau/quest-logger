@@ -26,6 +26,10 @@ class UserCreate(UserBase):
 class UserUpdate(UserBase):
     password: Optional[str] = None
 
+class UserUpdateProgression(BaseModel):
+  level: Optional[int] = None
+  experience: Optional[int] = None
+  
 
 class UserInDBBase(UserBase):
     id: Optional[int] = None

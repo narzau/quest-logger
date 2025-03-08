@@ -1,205 +1,304 @@
-# app/services/google_calendar_service.py
-import json
-from datetime import datetime, timedelta
-from app.services.google_ouath_service import (
-    get_google_credentials,
-    create_calendar_service,
-)
+# app/services/integration_service.py
+from datetime import datetime
+from typing import Optional, List, Dict, Any, Tuple
 from sqlalchemy.orm import Session
-from app import models
+
+from app.models.google_calendar import GoogleCalendarIntegration
+from app.models.quest import Quest
+from app.repositories.google_calendar_repository import GoogleCalendarRepository
+from app.integrations.google.oauth import GoogleOAuthClient
+from app.integrations.google.calendar import GoogleCalendarClient
 import logging
+import secrets
 
 logger = logging.getLogger(__name__)
 
+# Store OAuth states temporarily
+# In production, use Redis or another distributed cache
+OAUTH_STATES = {}
 
-def create_calendar_event(db: Session, user: models.User, quest: models.Quest):
-    """Create a Google Calendar event for a quest."""
-    if not user.google_token:
-        logger.warning(f"User {user.id} has no Google token")
-        return None
-
-    credentials = get_google_credentials(user, db)
-    if not credentials:
-        logger.warning(f"Could not get valid credentials for user {user.id}")
-        return None
-
-    service = create_calendar_service(credentials)
-
-    # Set end time to 1 hour after due date or current time if no due date
-    end_time = None
-    start_time = None
-
-    if quest.due_date:
-        start_time = quest.due_date
-        end_time = quest.due_date + timedelta(hours=1)
-    else:
-        # If no due date, use current time + 1 hour
-        start_time = datetime.datetime.utcnow()
-        end_time = start_time + timedelta(hours=1)
-
-    # Format times as RFC3339 strings
-    start_time_str = start_time.isoformat()
-    end_time_str = end_time.isoformat()
-
-    # Add timezone if not present
-    if "Z" not in start_time_str and "+" not in start_time_str:
-        start_time_str += "Z"
-    if "Z" not in end_time_str and "+" not in end_time_str:
-        end_time_str += "Z"
-
-    # Create event details with improved visibility
-    event = {
-        "summary": f"{quest.title}",
-        "description": quest.description or "",
-        "start": {
-            "dateTime": start_time_str,
-            "timeZone": "UTC",
-        },
-        "end": {
-            "dateTime": end_time_str,
-            "timeZone": "UTC",
-        },
-        "visibility": "public",
-        "transparency": "opaque",  # Show as busy
-        "status": "confirmed",
-        "reminders": {"useDefault": True},
-    }
-
-    try:
-        # Log the event being sent to Google
-        logger.info(f"Creating calendar event: {json.dumps(event)}")
-
-        # Add event to primary calendar
-        created_event = (
-            service.events().insert(calendarId="primary", body=event).execute()
-        )
-
-        # Log the created event response
-        logger.info(f"Created event response: {json.dumps(created_event)}")
-
-        # Get direct URL to the event
-        event_id = created_event.get("id")
-        html_link = created_event.get("htmlLink", "")
-
-        # Log direct access information
-        logger.info(f"Event created with ID: {event_id}")
-        logger.info(f"Direct event link: {html_link}")
-
-        # Update quest with calendar event ID
-        quest.google_calendar_event_id = event_id
-        db.add(quest)
-        db.commit()
-
-        # Verify the event exists by getting it back
+class GoogleCalendarService:
+    """Service for Google Calendar integration operations."""
+    
+    def __init__(self, db: Session):
+        self.db = db
+        self.repository = GoogleCalendarRepository(db)
+    
+    def start_oauth_flow(self, user_id: int) -> Dict[str, Any]:
+        """Start the Google OAuth flow for a user."""
         try:
-            verification = (
-                service.events().get(calendarId="primary", eventId=event_id).execute()
+            # Create OAuth flow
+            flow = GoogleOAuthClient.create_oauth_flow()
+            
+            # Generate state token
+            state = secrets.token_urlsafe(32)
+            
+            # Store state token temporarily
+            OAUTH_STATES[state] = user_id
+            
+            # Get or create integration record
+            integration = self.repository.get_by_user_id(user_id)
+            if integration:
+                integration.oauth_state = state
+                integration.connection_status = "authorizing"
+                self.repository.save(integration)
+            else:
+                integration = GoogleCalendarIntegration(
+                    user_id=user_id,
+                    oauth_state=state,
+                    connection_status="authorizing"
+                )
+                self.repository.save(integration)
+            
+            # Generate authorization URL
+            authorization_url, _ = flow.authorization_url(
+                access_type="offline",
+                include_granted_scopes="true",
+                prompt="consent",
+                state=state
             )
-            logger.info(f"Event verification successful: {verification.get('status')}")
+            
+            return {"authorization_url": authorization_url}
         except Exception as e:
-            logger.error(f"Event verification failed: {e}")
-
-        return event_id
-    except Exception as e:
-        logger.error(f"Error creating Google Calendar event: {e}", exc_info=True)
-        return None
-
-
-# Add a utility function to get a direct link to the event
-def get_calendar_event_link(db: Session, user: models.User, quest_id: int):
-    """Get a direct link to the Google Calendar event for a quest."""
-    quest = db.query(models.Quest).filter(models.Quest.id == quest_id).first()
-    if not quest or not quest.google_calendar_event_id:
-        return None
-
-    try:
-        credentials = get_google_credentials(user)
-        if not credentials:
+            logger.error(f"Error initiating Google OAuth flow: {e}")
+            raise ValueError(f"Failed to start Google authorization: {str(e)}")
+    
+    def complete_oauth_flow(self, state: str, code: str) -> GoogleCalendarIntegration:
+        """Complete the OAuth flow with the received code."""
+        try:
+            # Verify state and get integration
+            integration = self.repository.get_by_oauth_state(state)
+            if not integration:
+                raise ValueError("Invalid state parameter")
+            
+            # Also check the temporary state storage
+            if state not in OAUTH_STATES or OAUTH_STATES[state] != integration.user_id:
+                raise ValueError("State mismatch")
+            
+            # Clean up temporary state
+            if state in OAUTH_STATES:
+                del OAUTH_STATES[state]
+            
+            # Exchange code for tokens
+            credentials = GoogleOAuthClient.exchange_code(code)
+            
+            # Parse expiry time
+            token_expiry = GoogleOAuthClient.parse_expiry(credentials.expiry)
+            
+            # Update integration with tokens
+            integration.access_token = credentials.token
+            integration.refresh_token = credentials.refresh_token
+            integration.token_expiry = token_expiry
+            integration.oauth_state = None  # Clear the state
+            integration.connection_status = "connected"
+            integration.is_active = True
+            
+            # If no calendar is selected, use primary as default
+            if not integration.selected_calendar_id:
+                integration.selected_calendar_id = "primary"
+                integration.selected_calendar_name = "Primary Calendar"
+            
+            self.repository.save(integration)
+            return integration
+        except Exception as e:
+            logger.error(f"Error completing OAuth flow: {e}")
+            raise ValueError(f"Failed to complete Google authorization: {str(e)}")
+    
+    def get_integration(self, user_id: int) -> Optional[GoogleCalendarIntegration]:
+        """Get Google Calendar integration for a user."""
+        return self.repository.get_by_user_id(user_id)
+    
+    def get_active_integration(self, user_id: int) -> Optional[GoogleCalendarIntegration]:
+        """Get active Google Calendar integration for a user."""
+        return self.repository.get_active_by_user_id(user_id)
+    
+    def refresh_tokens(self, integration: GoogleCalendarIntegration) -> bool:
+        """Refresh OAuth tokens for an integration."""
+        try:
+            credentials = GoogleOAuthClient.refresh_token(integration)
+            if not credentials:
+                return False
+            
+            # Update integration with new tokens
+            integration.access_token = credentials.token
+            token_expiry = GoogleOAuthClient.parse_expiry(credentials.expiry)
+            integration.token_expiry = token_expiry
+            integration.connection_status = "connected"
+            
+            self.repository.save(integration)
+            return True
+        except Exception as e:
+            logger.error(f"Error refreshing tokens: {e}")
+            return False
+    
+    def list_available_calendars(self, user_id: int) -> List[Dict[str, Any]]:
+        """List available calendars for a user."""
+        integration = self.get_active_integration(user_id)
+        if not integration:
+            raise ValueError("No active Google Calendar integration found")
+        
+        # Check if token is expired
+        if integration.token_expiry and integration.token_expiry < datetime.utcnow():
+            success = self.refresh_tokens(integration)
+            if not success:
+                raise ValueError("Failed to refresh expired token")
+        
+        # Create calendar client
+        calendar_client = GoogleCalendarClient.from_integration(integration)
+        if not calendar_client:
+            raise ValueError("Failed to create calendar client")
+        
+        # List calendars
+        calendars = calendar_client.list_calendars()
+        
+        # Format response
+        result = []
+        for calendar in calendars:
+            # Only include calendars where the user has sufficient access
+            access_role = calendar.get('accessRole', '')
+            if access_role in ['owner', 'writer']:
+                result.append({
+                    'id': calendar.get('id'),
+                    'name': calendar.get('summary', 'Unnamed Calendar'),
+                    'description': calendar.get('description', ''),
+                    'primary': calendar.get('primary', False),
+                    'selected': (calendar.get('id') == integration.selected_calendar_id),
+                    'color': calendar.get('backgroundColor', '#9FC6E7'),
+                    'access_role': access_role
+                })
+        
+        return result
+    
+    def select_calendar(self, user_id: int, calendar_id: str) -> Dict[str, Any]:
+        """Select a calendar for a user."""
+        integration = self.get_active_integration(user_id)
+        if not integration:
+            raise ValueError("No active Google Calendar integration found")
+        
+        # Check if token is expired
+        if integration.token_expiry and integration.token_expiry < datetime.utcnow():
+            success = self.refresh_tokens(integration)
+            if not success:
+                raise ValueError("Failed to refresh expired token")
+        
+        # Create calendar client
+        calendar_client = GoogleCalendarClient.from_integration(integration)
+        if not calendar_client:
+            raise ValueError("Failed to create calendar client")
+        
+        # Verify the calendar exists and is accessible
+        calendar = calendar_client.get_calendar(calendar_id)
+        if not calendar:
+            raise ValueError(f"Calendar {calendar_id} not found or not accessible")
+        
+        # Update integration with selected calendar
+        calendar_name = calendar.get('summary', 'Selected Calendar')
+        integration.selected_calendar_id = calendar_id
+        integration.selected_calendar_name = calendar_name
+        self.repository.save(integration)
+        
+        return {
+            "message": f"Calendar '{calendar_name}' selected successfully",
+            "calendar_id": calendar_id,
+            "calendar_name": calendar_name
+        }
+    
+    def create_calendar_event(self, user_id: int, quest: Quest) -> Optional[str]:
+        """Create a calendar event for a quest."""
+        integration = self.get_active_integration(user_id)
+        if not integration:
+            logger.warning(f"No active Google Calendar integration found for user {user_id}")
             return None
-
-        service = create_calendar_service(credentials)
-        event = (
-            service.events()
-            .get(calendarId="primary", eventId=quest.google_calendar_event_id)
-            .execute()
-        )
-        return event.get("htmlLink")
-    except Exception as e:
-        logger.error(f"Error getting calendar event link: {e}")
-        return None
-
-
-def update_calendar_event(db: Session, user: models.User, quest: models.Quest):
-    """Update a Google Calendar event for a quest."""
-    if not user.google_token or not quest.google_calendar_event_id:
-        return None
-
-    credentials = get_google_credentials(user)
-    if not credentials:
-        return None
-
-    service = create_calendar_service(credentials)
-
-    try:
-        # Get existing event
-        event = (
-            service.events()
-            .get(calendarId="primary", eventId=quest.google_calendar_event_id)
-            .execute()
-        )
-
-        # Update event details
-        event["summary"] = f"Quest: {quest.title}"
-        event["description"] = quest.description or ""
-
-        if quest.due_date:
-            event["start"] = {
-                "dateTime": quest.due_date.isoformat(),
-                "timeZone": "UTC",
-            }
-            event["end"] = {
-                "dateTime": (quest.due_date + timedelta(hours=1)).isoformat(),
-                "timeZone": "UTC",
-            }
-
-        # Update event in calendar
-        updated_event = (
-            service.events()
-            .update(
-                calendarId="primary", eventId=quest.google_calendar_event_id, body=event
-            )
-            .execute()
-        )
-
-        return updated_event.get("id")
-    except Exception as e:
-        logger.error(f"Error updating Google Calendar event: {e}")
-        return None
-
-
-def delete_calendar_event(db: Session, user: models.User, quest: models.Quest):
-    """Delete a Google Calendar event for a quest."""
-    if not user.google_token or not quest.google_calendar_event_id:
-        return False
-
-    credentials = get_google_credentials(user)
-    if not credentials:
-        return False
-
-    service = create_calendar_service(credentials)
-
-    try:
-        # Delete event from calendar
-        service.events().delete(
-            calendarId="primary", eventId=quest.google_calendar_event_id
-        ).execute()
-
-        # Clear event ID from quest
-        quest.google_calendar_event_id = None
-        db.add(quest)
-        db.commit()
-
+        
+        # Check if token is expired
+        if integration.token_expiry and integration.token_expiry < datetime.utcnow():
+            success = self.refresh_tokens(integration)
+            if not success:
+                logger.warning(f"Failed to refresh expired token for user {user_id}")
+                return None
+        
+        # Create calendar client
+        calendar_client = GoogleCalendarClient.from_integration(integration)
+        if not calendar_client:
+            logger.warning(f"Failed to create calendar client for user {user_id}")
+            return None
+        
+        # Use selected calendar if available, otherwise use primary
+        calendar_id = integration.selected_calendar_id or 'primary'
+        
+        # Create event
+        event = calendar_client.create_event(quest, calendar_id)
+        if not event:
+            return None
+        
+        return event.get('id')
+    
+    def update_calendar_event(self, user_id: int, quest: Quest) -> bool:
+        """Update a calendar event for a quest."""
+        if not quest.google_calendar_event_id:
+            return False
+            
+        integration = self.get_active_integration(user_id)
+        if not integration:
+            logger.warning(f"No active Google Calendar integration found for user {user_id}")
+            return False
+        
+        # Check if token is expired
+        if integration.token_expiry and integration.token_expiry < datetime.utcnow():
+            success = self.refresh_tokens(integration)
+            if not success:
+                logger.warning(f"Failed to refresh expired token for user {user_id}")
+                return False
+        
+        # Create calendar client
+        calendar_client = GoogleCalendarClient.from_integration(integration)
+        if not calendar_client:
+            logger.warning(f"Failed to create calendar client for user {user_id}")
+            return False
+        
+        # Use selected calendar if available, otherwise use primary
+        calendar_id = integration.selected_calendar_id or 'primary'
+        
+        # Update event
+        result = calendar_client.update_event(quest.google_calendar_event_id, quest, calendar_id)
+        return result is not None
+    
+    def delete_calendar_event(self, user_id: int, quest: Quest) -> bool:
+        """Delete a calendar event for a quest."""
+        if not quest.google_calendar_event_id:
+            return False
+            
+        integration = self.get_active_integration(user_id)
+        if not integration:
+            logger.warning(f"No active Google Calendar integration found for user {user_id}")
+            return False
+        
+        # Check if token is expired
+        if integration.token_expiry and integration.token_expiry < datetime.utcnow():
+            success = self.refresh_tokens(integration)
+            if not success:
+                logger.warning(f"Failed to refresh expired token for user {user_id}")
+                return False
+        
+        # Create calendar client
+        calendar_client = GoogleCalendarClient.from_integration(integration)
+        if not calendar_client:
+            logger.warning(f"Failed to create calendar client for user {user_id}")
+            return False
+        
+        # Use selected calendar if available, otherwise use primary
+        calendar_id = integration.selected_calendar_id or 'primary'
+        
+        # Delete event
+        return calendar_client.delete_event(quest.google_calendar_event_id, calendar_id)
+    
+    def disconnect(self, user_id: int) -> bool:
+        """Disconnect Google Calendar integration."""
+        integration = self.repository.get_by_user_id(user_id)
+        if not integration:
+            return False
+        
+        integration.is_active = False
+        integration.connection_status = "disconnected"
+        self.repository.save(integration)
         return True
-    except Exception as e:
-        logger.error(f"Error deleting Google Calendar event: {e}")
-        return False
