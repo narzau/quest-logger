@@ -196,6 +196,34 @@ class QuestService:
         logger.info(f"Quest created successfully with ID {quest.id}")
         return quest
 
+    async def suggest_quest_from_audio(
+        self,
+        audio_file: File,
+        language: str,
+    ) -> schemas.QuestCreate:
+        """Suggest a new quest from audio feedback"""
+        transcription_result = await self.stt_service.transcribe(
+            audio_file=audio_file,
+            language=language,
+        )
+
+        try:
+            quest_in = await self.chat_completion_service.parse_quest_from_text(
+                transcription_result.text, language, "Argentina"
+            )
+            quest_in.exp_reward = self._calculate_quest_exp_reward(
+                rarity=quest_in.rarity,
+                quest_type=quest_in.quest_type,
+                priority=quest_in.priority,
+            )
+
+            return quest_in
+        except ValueError as e:
+            logger.error(f"Error parsing quest from text: {str(e)}", exc_info=True)
+            raise ProcessingException(
+                detail="We couldn't turn your voice into a quest",
+            )
+
     def _calculate_quest_exp_reward(
         self,
         rarity: QuestRarity,

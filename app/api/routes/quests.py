@@ -201,23 +201,50 @@ async def create_quest_from_voice(
         raise HTTPException(status_code=400, detail=str(e))
 
 
-# @router.post("/voice-generation/suggest", response_model=schemas.QuestCreate)
-# async def suggest_quest_from_voice(
-#     *,
-#     audio_file: UploadFile = File(...),
-#     language: Optional[str] = Form(None),
-#     current_user: models.User = Depends(deps.get_current_active_user),
-#     quest_service: QuestService = Depends(deps.get_quest_service()),
-# ) -> Any:
-#     """
-#     Create a new quest from voice input.
+@router.post("/voice-generation/suggest", response_model=schemas.QuestCreate)
+async def suggest_quest_from_voice(
+    *,
+    audio_file: UploadFile = File(...),
+    language: Optional[str] = Form(None),
+    current_user: models.User = Depends(deps.get_current_active_user),
+    quest_service: QuestService = Depends(deps.get_quest_service),
+) -> Any:
+    """
+    Create a new quest from voice input.
 
-#     - **audio_file**: Audio recording (supported formats: wav, mp3, webm, ogg)
-#     - **language**: Optional language hint (ISO code like 'en', 'es', 'fr')
-#     """
-#     quest = quest_service.suggest_quest_from_voice(
-#         user_id=current_user.id,
-#         audio_file=audio_file,
-#         language=language,
-#     )
-#     return quest
+    - **audio_file**: Audio recording (supported formats: wav, mp3, webm, ogg)
+    - **language**: Optional language hint (ISO code like 'en', 'es', 'fr')
+    """
+    # Validate audio file
+    if not settings.ENABLE_VOICE_FEATURES:
+        raise HTTPException(
+            status_code=400,
+            detail="Voice features are not enabled on this server.",
+        )
+
+    # Validate content type
+    valid_content_types = [
+        "audio/wav",
+        "audio/wave",
+        "audio/x-wav",
+        "audio/mp3",
+        "audio/mpeg",
+        "audio/webm",
+        "audio/ogg",
+        "audio/x-m4a",
+    ]
+
+    if audio_file.content_type not in valid_content_types:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unsupported audio format: {audio_file.content_type}. Supported formats: WAV, MP3, WebM, OGG, M4A",
+        )
+    try:
+        return await quest_service.suggest_quest_from_audio(
+            audio_file=audio_file,
+            language=language,
+        )
+    except ProcessingException as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    except BusinessException as e:
+        raise HTTPException(status_code=400, detail=str(e))

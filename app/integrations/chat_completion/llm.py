@@ -138,7 +138,6 @@ class ChatCompletionService:
 
         return translation
 
-    # app/services/llm_service.py
     async def parse_quest_from_text(
         self, text: str, language: Optional[str], country: str
     ) -> QuestCreate:
