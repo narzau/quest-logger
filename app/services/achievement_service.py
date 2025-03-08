@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from app import models
 
-class AchievementRepository:
+class AchievementService:
     def __init__(self, db: Session):
         self.db = db
     

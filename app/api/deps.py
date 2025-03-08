@@ -12,6 +12,7 @@ from app.core import security
 from app.core.config import settings
 from app.db.base import SessionLocal
 from app.services.quest_service import QuestService
+from app.services.achievement_service import AchievementService
 from app.services.google_calendar_service import GoogleCalendarService
 
 oauth2_scheme = OAuth2PasswordBearer(
@@ -61,6 +62,12 @@ def get_quest_service(db: Session = Depends(get_db)) -> QuestService:
     """
     return QuestService(db)
   
+
+def get_achievement_service(db: Session = Depends(get_db)) -> QuestService:
+    """
+    Provides a QuestService instance with DB session.
+    """
+    return AchievementService(db)
   
 def get_calendar_service(db: Session = Depends(get_db)) -> GoogleCalendarService:
     """
