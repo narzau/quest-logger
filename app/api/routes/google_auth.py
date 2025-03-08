@@ -68,7 +68,7 @@ def get_error_page(error_message):
 @router.get("/authorize")
 def authorize_google(
     current_user: models.User = Depends(deps.get_current_active_user),
-    calendar_service: GoogleCalendarService = Depends(deps.get_calendar_service)
+    calendar_service: GoogleCalendarService = Depends(deps.get_calendar_service),
 ):
     """Start the Google OAuth flow."""
     try:
@@ -129,7 +129,7 @@ async def google_auth_callback(
 @router.post("/complete", response_class=HTMLResponse)
 async def complete_google_auth(
     request: Request,
-    calendar_service: GoogleCalendarService = Depends(deps.get_calendar_service)
+    calendar_service: GoogleCalendarService = Depends(deps.get_calendar_service),
 ):
     """Complete the OAuth flow by exchanging the code for tokens."""
     try:
@@ -153,7 +153,7 @@ async def complete_google_auth(
 @router.get("/calendars")
 def list_google_calendars(
     current_user: models.User = Depends(deps.get_current_active_user),
-    calendar_service: GoogleCalendarService = Depends(deps.get_calendar_service)
+    calendar_service: GoogleCalendarService = Depends(deps.get_calendar_service),
 ):
     """List user's available Google Calendars."""
     try:
@@ -175,7 +175,7 @@ def list_google_calendars(
 def select_google_calendar(
     calendar_data: dict = Body(...),
     current_user: models.User = Depends(deps.get_current_active_user),
-    calendar_service: GoogleCalendarService = Depends(deps.get_calendar_service)
+    calendar_service: GoogleCalendarService = Depends(deps.get_calendar_service),
 ):
     """Select a Google Calendar for creating quest events."""
     try:
@@ -239,7 +239,6 @@ def get_google_auth_status(
 def disconnect_google_calendar(
     current_user: models.User = Depends(deps.get_current_active_user),
     calendar_service: GoogleCalendarService = Depends(deps.get_calendar_service),
-    
 ):
     """Disconnect Google Calendar integration."""
     success = calendar_service.disconnect(current_user.id)

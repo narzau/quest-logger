@@ -28,6 +28,7 @@ def get_db() -> Generator:
     finally:
         db.close()
 
+
 def get_user_service(db: Session = Depends(get_db)) -> UserService:
     """
     Provides a UserService instance with DB session.
@@ -58,7 +59,7 @@ def get_calendar_service(db: Session = Depends(get_db)) -> GoogleCalendarService
 
 def get_current_user(
     token: str = Depends(oauth2_scheme),
-    user_service: UserService = Depends(get_user_service)
+    user_service: UserService = Depends(get_user_service),
 ) -> models.User:
     try:
         payload = jwt.decode(
@@ -82,5 +83,3 @@ def get_current_active_user(
     if not current_user.is_active:
         raise HTTPException(status_code=400, detail="Inactive user")
     return current_user
-
-

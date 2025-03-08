@@ -1,11 +1,10 @@
 # app/repositories/quest_repository.py
-from typing import List, Optional, Dict, Any
+from typing import List, Optional
 from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import and_, or_
 from datetime import datetime
 
 from app.repositories.base_repository import BaseRepository
-from app import schemas, models
+from app import models
 
 
 class AchievementRepository(BaseRepository[models.Achievement]):

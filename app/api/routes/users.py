@@ -1,9 +1,7 @@
 # app/api/endpoints/users.py
-from typing import Any, List
+from typing import Any
 
 from fastapi import APIRouter, Body, Depends, HTTPException
-from pydantic import EmailStr
-from sqlalchemy.orm import Session
 
 from app import models, schemas
 from app.services.user_service import UserService

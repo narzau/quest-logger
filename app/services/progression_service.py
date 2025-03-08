@@ -6,8 +6,8 @@ from datetime import datetime
 from sqlalchemy.orm import Session
 from app import models
 from app.models.quest import QuestRarity, QuestType
-from app.repositories.user_repository import UserRepository
-from app.repositories.achievement_repository import AchievementRepository
+from app.services.user_service import UserService
+from app.services.achievement_service import AchievementService
 
 logger = logging.getLogger(__name__)
 
@@ -15,15 +15,15 @@ logger = logging.getLogger(__name__)
 class ProgressionService:
     def __init__(self, db: Session):
         self.db = db
-        self.user_repository = UserRepository(db)
-        self.achievement_repository = AchievementRepository(db)
+        self.user_service = UserService(db)
+        self.achievement_service = AchievementService(db)
 
     def handle_quest_completion(
         self, user_id: int, quest: models.Quest
     ) -> Tuple[bool, List[models.Achievement]]:
         """Handle quest completion progression."""
         # Track state for debugging
-        user = self.user_repository.get_by_id(user_id)
+        user = self.user_service.get_user_by_id(user_id)
         if not user:
             return False, []
 
@@ -32,7 +32,7 @@ class ProgressionService:
 
         # Add ONLY the quest XP
         user.experience += quest.exp_reward
-        self.user_repository.update(user)
+        self.user_service.update(user)
         logger.info(f"Quest XP added: {quest.exp_reward}")
 
         # Update all relevant achievement progress
@@ -47,7 +47,7 @@ class ProgressionService:
         )
 
         # Final log for verification
-        user = self.user_repository.get_by_id(user_id)
+        user = self.user_service.get_user_by_id(user_id)
         logger.info(
             f"Total XP change: {user.experience - initial_xp} (Quest: {quest.exp_reward})"
         )
@@ -83,16 +83,14 @@ class ProgressionService:
 
     def _update_progress(self, user_id: int, criterion_type: str, amount: int) -> None:
         """Update achievement progress."""
-        criteria = self.achievement_repository.get_criteria_by_type(criterion_type)
+        criteria = self.achievement_service.get_criteria_by_type(criterion_type)
 
         for criterion in criteria:
-            progress = self.achievement_repository.get_user_progress(
-                user_id, criterion.id
-            )
+            progress = self.achievement_service.get_user_progress(user_id, criterion.id)
 
             # Calculate new value
             if criterion_type == "user_level":
-                user = self.user_repository.get_by_id(user_id)
+                user = self.user_service.get_user_by_id(user_id)
                 new_value = user.level
             else:
                 current_value = progress.progress if progress else 0
@@ -100,7 +98,7 @@ class ProgressionService:
 
             # Only update if changed
             if not progress or progress.progress != new_value:
-                self.achievement_repository.create_or_update_progress(
+                self.achievement_service.create_or_update_progress(
                     user_id, criterion.id, new_value
                 )
 
@@ -111,8 +109,7 @@ class ProgressionService:
         Process achievements and level-ups carefully to prevent duplicates.
         Returns (did_level_up, newly_unlocked_achievements)
         """
-        user = self.user_repository.get_by_id(user_id)
-        original_level = user.level
+        user = self.user_service.get_user_by_id(user_id)
         newly_unlocked = []
 
         # First check for potential new achievements
@@ -123,9 +120,9 @@ class ProgressionService:
             # Award XP for new achievements
             total_achievement_xp = sum(a.exp_reward for a in unlocked)
             if total_achievement_xp > 0:
-                user = self.user_repository.get_by_id(user_id)  # Refresh user
+                user = self.user_service.get_user_by_id(user_id)  # Refresh user
                 user.experience += total_achievement_xp
-                self.user_repository.update(user)
+                self.user_service.update(user)
                 logger.info(f"Achievement XP added: {total_achievement_xp}")
 
         # Check for level-ups (just once)
@@ -134,7 +131,7 @@ class ProgressionService:
         # If user leveled up, check for level-based achievements
         if leveled_up:
             # Update level-based progress
-            user = self.user_repository.get_by_id(user_id)  # Refresh user
+            user = self.user_service.get_user_by_id(user_id)  # Refresh user
             self._update_progress(user_id, "user_level", user.level)
 
             # Check for level-based achievements
@@ -147,16 +144,16 @@ class ProgressionService:
                 # Award XP for level-based achievements
                 level_achievement_xp = sum(a.exp_reward for a in level_achievements)
                 if level_achievement_xp > 0:
-                    user = self.user_repository.get_by_id(user_id)  # Refresh user
+                    user = self.user_service.get_user_by_id(user_id)  # Refresh user
                     user.experience += level_achievement_xp
-                    self.user_repository.update(user)
+                    self.user_service.update(user)
                     logger.info(f"Level achievement XP added: {level_achievement_xp}")
 
         return leveled_up, newly_unlocked
 
     def _check_for_level_up(self, user_id: int) -> bool:
         """Check if user should level up and apply it if needed."""
-        user = self.user_repository.get_by_id(user_id)
+        user = self.user_service.get_user_by_id(user_id)
         if not user:
             return False
 
@@ -172,7 +169,7 @@ class ProgressionService:
 
         # If level changed, save it
         if user.level > original_level:
-            self.user_repository.update(user)
+            self.user_service.update(user)
             logger.info(f"User leveled up from {original_level} to {user.level}")
             return True
 
@@ -189,13 +186,13 @@ class ProgressionService:
         Check for unprocessed achievements that should be unlocked.
         The processed_achievement_ids set prevents double-processing.
         """
-        user = self.user_repository.get_by_id(user_id)
+        user = self.user_service.get_user_by_id(user_id)
         if not user:
             return []
 
-        all_achievements = self.achievement_repository.get_all()
-        user_achievements = self.achievement_repository.get_user_achievements(user_id)
-        progress_records = self.achievement_repository.get_user_all_progress(user_id)
+        all_achievements = self.achievement_service.get_all()
+        user_achievements = self.achievement_service.get_user_achievements(user_id)
+        progress_records = self.achievement_service.get_user_all_progress(user_id)
 
         # Map achievement IDs and progress for quick lookup
         earned_map = {ua.achievement_id: ua for ua in user_achievements}
@@ -234,13 +231,13 @@ class ProgressionService:
 
                 if existing and achievement.is_repeatable:
                     # Increment repeatable achievement
-                    self.achievement_repository.increment_user_achievement(existing)
+                    self.achievement_service.increment_user_achievement(existing)
                     logger.info(
                         f"Incremented repeatable achievement: {achievement.name}"
                     )
                 elif not existing:
                     # Create new achievement
-                    self.achievement_repository.create_user_achievement(
+                    self.achievement_service.create_user_achievement(
                         user_id, achievement.id
                     )
                     logger.info(f"Unlocked new achievement: {achievement.name}")
