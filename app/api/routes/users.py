@@ -51,6 +51,6 @@ def update_user_me(
     """
 
     try:
-        return user_service.update(current_user.id, user_in)
+        return user_service.update(current_user)
     except BusinessException as e:
         raise HTTPException(status_code=400, detail=str(e))

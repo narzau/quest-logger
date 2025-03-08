@@ -82,14 +82,7 @@ class UserService:
 
         return False, original_level
 
-    def update(self, user_id: int, update_data: schemas.UserUpdate):
-        user = self.repository.get_by_id(user_id)
-
-        for field in ["username"]:
-            value = getattr(update_data, field)
-            if value is not None:
-                setattr(user, field, value)
-
+    def update(self, user: models.User):
         return self.repository.update(user)
 
     def create_user(self, create_data: schemas.UserCreate):
