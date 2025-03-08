@@ -2,7 +2,7 @@
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, Query
 from fastapi.responses import RedirectResponse, HTMLResponse
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 from sqlalchemy.orm import Session
 from app.api import deps
 from app import models
@@ -106,12 +106,12 @@ async def google_auth_callback(
         user.google_refresh_token = credentials.refresh_token
 
         # Fix: Handle expiry correctly depending on type
-        if isinstance(credentials.expiry, datetime.datetime):
+        if isinstance(credentials.expiry, datetime):
             # Already a datetime object, use directly
             user.google_token_expiry = credentials.expiry
         elif isinstance(credentials.expiry, (int, float)):
             # It's a timestamp (integer/float), convert to datetime
-            user.google_token_expiry = datetime.datetime.fromtimestamp(
+            user.google_token_expiry = datetime.fromtimestamp(
                 credentials.expiry
             )
         else:
@@ -119,7 +119,7 @@ async def google_auth_callback(
             logger.warning(
                 f"Unexpected type for credentials.expiry: {type(credentials.expiry)}"
             )
-            user.google_token_expiry = datetime.datetime.now() + datetime.timedelta(
+            user.google_token_expiry = datetime.now() + timedelta(
                 hours=1
             )
 
