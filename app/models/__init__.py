@@ -7,6 +7,4 @@ from app.models.achievement import (
     AchievementCriterion,
     UserAchievementProgress,
 )
-from app.models.google_calendar import (
-  GoogleCalendarIntegration
-)
+from app.models.google_calendar import GoogleCalendarIntegration

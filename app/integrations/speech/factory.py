@@ -51,4 +51,3 @@ class STTServiceFactory:
         available["deepgram"] = bool(settings.DEEPGRAM_API_KEY)
 
         return available
-

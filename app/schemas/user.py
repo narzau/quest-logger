@@ -11,7 +11,7 @@ class UserBase(BaseModel):
 
 
 class UserLogin(BaseModel):
-    username: str = Field(..., description="Username or email address")
+    email: EmailStr = Field(..., description="Email address")
     password: str = Field(..., min_length=6, description="User password")
 
 
@@ -23,13 +23,14 @@ class UserCreate(UserBase):
 
 
 # Properties to receive via API on update
-class UserUpdate(UserBase):
-    password: Optional[str] = None
+class UserUpdate(BaseModel):
+    username: Optional[str] = None
+
 
 class UserUpdateProgression(BaseModel):
-  level: Optional[int] = None
-  experience: Optional[int] = None
-  
+    level: Optional[int] = None
+    experience: Optional[int] = None
+
 
 class UserInDBBase(UserBase):
     id: Optional[int] = None

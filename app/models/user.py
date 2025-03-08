@@ -9,7 +9,7 @@ class User(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     email = Column(String, unique=True, index=True, nullable=False)
-    username = Column(String, unique=True, index=True, nullable=False)
+    username = Column(String, index=True, nullable=False)
     hashed_password = Column(String, nullable=False)
     is_active = Column(Boolean(), default=True)
 
@@ -21,4 +21,6 @@ class User(Base):
     quests = relationship("Quest", back_populates="owner")
     achievements = relationship("UserAchievement", back_populates="user")
     achievement_progress = relationship("UserAchievementProgress")
-    google_calendar_integration = relationship("GoogleCalendarIntegration", back_populates="user", cascade="all, delete-orphan")
+    google_calendar_integration = relationship(
+        "GoogleCalendarIntegration", back_populates="user", cascade="all, delete-orphan"
+    )

@@ -1,16 +1,16 @@
 # app/api/routes/google_auth.py
 from fastapi import APIRouter, Depends, HTTPException, Request, Body
 from fastapi.responses import HTMLResponse
-from sqlalchemy.orm import Session
 
 from app.api import deps
 from app import models
 from app.services.google_calendar_service import GoogleCalendarService
 import logging
-from datetime import datetime, timezone
+from datetime import datetime
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+
 
 # HTML Templates
 def get_success_page():
@@ -38,6 +38,7 @@ def get_success_page():
     </html>
     """
 
+
 def get_error_page(error_message):
     """Generate error HTML page"""
     return f"""
@@ -63,25 +64,24 @@ def get_error_page(error_message):
     </html>
     """
 
+
 @router.get("/authorize")
 def authorize_google(
-    db: Session = Depends(deps.get_db),
     current_user: models.User = Depends(deps.get_current_active_user),
+    calendar_service: GoogleCalendarService = Depends(deps.get_calendar_service)
 ):
     """Start the Google OAuth flow."""
     try:
         # Use the service to start OAuth flow
-        service = GoogleCalendarService(db)
-        result = service.start_oauth_flow(current_user.id)
+        result = calendar_service.start_oauth_flow(current_user.id)
         return result
     except Exception as e:
         logger.error(f"Error initiating Google OAuth flow: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+
 @router.get("/callback", response_class=HTMLResponse)
 async def google_auth_callback(
-    request: Request,
-    db: Session = Depends(deps.get_db),
     state: str = None,
     code: str = None,
     error: str = None,
@@ -91,10 +91,9 @@ async def google_auth_callback(
     """
     if error:
         return get_error_page(f"Authorization denied: {error}")
-    
+
     if not code or not state:
         return get_error_page("Missing required parameters")
-    print(state, code, "state and code")
     # Create a secure form that will post to the complete endpoint
     return f"""
     <!DOCTYPE html>
@@ -126,10 +125,11 @@ async def google_auth_callback(
     </html>
     """
 
+
 @router.post("/complete", response_class=HTMLResponse)
 async def complete_google_auth(
     request: Request,
-    db: Session = Depends(deps.get_db),
+    calendar_service: GoogleCalendarService = Depends(deps.get_calendar_service)
 ):
     """Complete the OAuth flow by exchanging the code for tokens."""
     try:
@@ -137,79 +137,78 @@ async def complete_google_auth(
         form_data = await request.form()
         state = form_data.get("state")
         code = form_data.get("code")
-        
+
         if not state or not code:
             return get_error_page("Missing required parameters")
-        
+
         # Use the service to complete OAuth flow
-        service = GoogleCalendarService(db)
-        service.complete_oauth_flow(state, code)
-        
+        calendar_service.complete_oauth_flow(state, code)
+
         return get_success_page()
     except Exception as e:
         logger.error(f"Error completing Google OAuth: {e}")
         return get_error_page(str(e))
 
+
 @router.get("/calendars")
 def list_google_calendars(
-    db: Session = Depends(deps.get_db),
     current_user: models.User = Depends(deps.get_current_active_user),
+    calendar_service: GoogleCalendarService = Depends(deps.get_calendar_service)
 ):
     """List user's available Google Calendars."""
     try:
-        service = GoogleCalendarService(db)
-        calendars = service.list_available_calendars(current_user.id)
-        
+        calendars = calendar_service.list_available_calendars(current_user.id)
+
         # Get the integration to determine selected calendar
-        integration = service.get_active_integration(current_user.id)
-        selected_calendar_id = integration.selected_calendar_id if integration else 'primary'
-        
-        return {
-            "calendars": calendars,
-            "selected_calendar_id": selected_calendar_id
-        }
+        integration = calendar_service.get_active_integration(current_user.id)
+        selected_calendar_id = (
+            integration.selected_calendar_id if integration else "primary"
+        )
+
+        return {"calendars": calendars, "selected_calendar_id": selected_calendar_id}
     except Exception as e:
         logger.error(f"Error listing calendars: {e}")
         raise HTTPException(status_code=400, detail=str(e))
 
+
 @router.post("/calendars/select")
 def select_google_calendar(
     calendar_data: dict = Body(...),
-    db: Session = Depends(deps.get_db),
     current_user: models.User = Depends(deps.get_current_active_user),
+    calendar_service: GoogleCalendarService = Depends(deps.get_calendar_service)
 ):
     """Select a Google Calendar for creating quest events."""
     try:
         calendar_id = calendar_data.get("calendar_id")
         if not calendar_id:
             raise HTTPException(status_code=400, detail="Calendar ID is required")
-        
-        service = GoogleCalendarService(db)
-        result = service.select_calendar(current_user.id, calendar_id)
-        
+
+        result = calendar_service.select_calendar(current_user.id, calendar_id)
+
         return result
     except Exception as e:
         logger.error(f"Error selecting calendar: {e}")
         raise HTTPException(status_code=400, detail=str(e))
 
+
 @router.get("/status")
 def get_google_auth_status(
     current_user: models.User = Depends(deps.get_current_active_user),
-    calendar_service: GoogleCalendarService = Depends(deps.get_calendar_service)
+    calendar_service: GoogleCalendarService = Depends(deps.get_calendar_service),
 ):
     """Check Google Calendar connection status."""
     integration = calendar_service.get_integration(current_user.id)
-    
+
     if not integration or not integration.is_active:
         return {
             "connected": False,
             "status": "not_connected",
-            "message": "Not connected to Google Calendar"
+            "message": "Not connected to Google Calendar",
         }
-    
+
     # Check if token is expired
     is_expired = integration.token_expiry and integration.token_expiry < datetime.now()
-    
+
     if is_expired:
         # Try to refresh the token
         success = calendar_service.refresh_tokens(integration)
@@ -218,9 +217,11 @@ def get_google_auth_status(
                 "connected": False,
                 "status": "expired",
                 "message": "Token expired and refresh failed",
-                "last_connected": integration.updated_at.isoformat() if hasattr(integration, 'updated_at') and integration.updated_at else None
+                "last_connected": integration.updated_at.isoformat()
+                if hasattr(integration, "updated_at") and integration.updated_at
+                else None,
             }
-    
+
     # Token is valid
     return {
         "connected": True,
@@ -228,25 +229,28 @@ def get_google_auth_status(
         "message": "Connected to Google Calendar",
         "calendar_id": integration.selected_calendar_id,
         "calendar_name": integration.selected_calendar_name,
-        "expires_at": integration.token_expiry.isoformat() if integration.token_expiry else None
+        "expires_at": integration.token_expiry.isoformat()
+        if integration.token_expiry
+        else None,
     }
+
 
 @router.delete("/disconnect")
 def disconnect_google_calendar(
-    db: Session = Depends(deps.get_db),
     current_user: models.User = Depends(deps.get_current_active_user),
+    calendar_service: GoogleCalendarService = Depends(deps.get_calendar_service),
+    
 ):
     """Disconnect Google Calendar integration."""
-    service = GoogleCalendarService(db)
-    success = service.disconnect(current_user.id)
-    
+    success = calendar_service.disconnect(current_user.id)
+
     if not success:
         raise HTTPException(
             status_code=400,
-            detail="Google Calendar integration not found or already disconnected"
+            detail="Google Calendar integration not found or already disconnected",
         )
-    
+
     return {
         "success": True,
-        "message": "Google Calendar integration disconnected successfully"
+        "message": "Google Calendar integration disconnected successfully",
     }
