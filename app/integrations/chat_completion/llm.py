@@ -186,73 +186,57 @@ class ChatCompletionService:
             return f"{current_date.year}-{current_date.month:02d}-{last_day}"
 
         system_prompt = f"""
-        You are a helpful assistant that extracts structured task information from user voice commands. Convert the user's voice command into a properly formatted quest object.
+        You extract task data from voice commands into quest objects. ALWAYS format response as JSON.
 
-        CRITICAL INFORMATION: The values of the task fields must match the user's language. input language must match output language. meaning english input = english output, spanish input = spanish output.
-        CRITICAL INFORMATION: due dates must computed relative to the current date and time (Current date in ISO format: {current_time_iso})
-        CRITICAL INFORMATION: if a date is provided, but not a specific time. then automatically set it to 23:59:59 (hh:mm:ss)
-        
-        User's language: {language}
-        Current day: {current_time.weekday()} (0: Monday, 1: Tuesday, 2: Wednesday, 3: Thursday, 4: Friday, 5: Saturday, 6: Sunday)
-        Current Date: {current_time.strftime('%Y-%m-%d')}
-        Current date in ISO format: {current_time_iso}
-        Current Time (UTC): {current_time.strftime('%H:%M:%S')}
-        Current Day of Month: {current_time.day}
-        Current Month: {current_time.month}
-        Current Year: {current_time.year}
+        Current: {current_time_iso} ({current_time.strftime('%Y-%m-%d')}, {['Mon','Tue','Wed','Thu','Fri','Sat','Sun'][current_time.weekday()]})
 
+        Date reference:
+        - Today: {current_time.strftime('%Y-%m-%d')}
+        - Tomorrow: {(current_time + timedelta(days=1)).strftime('%Y-%m-%d')}
+        - Next Mon: {next_weekday(current_time, 0)}
+        - Next Tue: {next_weekday(current_time, 1)}
+        - Next Wed: {next_weekday(current_time, 2)}
+        - Next Thu: {next_weekday(current_time, 3)}
+        - Next Fri: {next_weekday(current_time, 4)}
+        - Next Sat: {next_weekday(current_time, 5)}
+        - Next Sun: {next_weekday(current_time, 6)}
 
+        Extract these fields in {language}:
+        - title: Brief task name (3-6 words)
+        - description: Format based on complexity:
+          * FOR SINGLE TASKS: Just "#### Task details" with 1-2 sentences
+          * FOR MULTIPLE TASKS: "#### Summary" followed by "- [ ] subtask1" etc.
+          * Always remove "I need to" and similar phrases
+        - due_date: ISO format (YYYY-MM-DDTHH:MM:SSZ)
+          * IMPORTANT: If specific date mentioned (e.g., Monday, Friday, tomorrow), calculate correctly
+          * If no time specified, use 23:59:59
+          * If no date, set to null
+        - rarity: common/uncommon/rare/epic/legendary (default: common)
+        - quest_type: daily/regular/epic/boss (default: regular)
+        - priority: 1-100 (default: 33)
 
-        # Date Calculation Helper:
-        - For "today" use: {current_time.strftime('%Y-%m-%d')}
-        - For "tomorrow" use: {(current_time + timedelta(days=1)).strftime('%Y-%m-%d')}
-        - For "next Monday" use: {next_weekday(current_time, 0)}
-        - For "next Tuesday" use: {next_weekday(current_time, 1)}
-        - For "next Wednesday" use: {next_weekday(current_time, 2)}
-        - For "next Thursday" use: {next_weekday(current_time, 3)}
-        - For "next Friday" use: {next_weekday(current_time, 4)}
-        - For "next Saturday" use: {next_weekday(current_time, 5)}
-        - For "next Sunday" use: {next_weekday(current_time, 6)}
-        - For "in X days" use: {(current_time + timedelta(days=3)).strftime('%Y-%m-%d')} (example for "in 3 days")
-        - For "next month" use: {next_month(current_time)}
-        - For "end of month" use: {end_of_month(current_time)}
-
-        Extract the following fields:
-        - title: The main task description (required). Keep it very short and concise (3-6 words). Do not include dates/times here.
-        - description: Additional details about the task (optional).
-        - due_date: The due date and time in ISO 8601 format (YYYY-MM-DDTHH:MM:SSZ), computed relative to the current date and time. Follow the date calculation guide above.
-        - rarity: Importance/complexity (common, uncommon, rare, epic, legendary). Default: common.
-        - quest_type: Type (daily, regular, epic, boss). Default: regular.
-        - priority: Numeric priority from 1 (low) to 100 (high). Default: 33. Higher if urgent.
-
-        These extracted fields values must respect the original language of the user's input.
-
-        Examples: (if today was 2025-03-05, which is a Wednesday)
-        
-        User says: "El viernes tengo que llevar a mi gato al veterinario. Turno a las 11 am"
-        {{
-          "title": "Llevar gato al veterinario",
-          "description": "El viernes tengo que turno a las 11 AM para llevar a mi gato al veterinario.",
-          "due_date": "2025-03-7T11:00:00Z",
-          "rarity": "common",
-          "quest_type": "regular",
-          "priority": 2
-        }}
-
-        User says: "I have a dentist appointment next Monday at 11 am."
+        Examples:
+        1. SINGLE TASK: "Dentist appointment on Friday at 2pm"
         {{
           "title": "Dentist appointment",
-          "description": "I have a dentist appointment next Monday at 11 am",
-          "due_date": "2025-03-10T11:00:00Z",
+          "description": "#### Dental visit\\nGo to dentist office on Friday at 2pm",
+          "due_date": "{(current_time.replace(hour=14, minute=0, second=0) + timedelta(days=(4-current_time.weekday()) % 7)).strftime('%Y-%m-%dT%H:%M:%SZ')}",
           "rarity": "common",
           "quest_type": "regular",
-          "priority": 2
+          "priority": 40
         }}
-        
 
-        The values of the fields must be generated based on the user's language. input language must match output language. meaning english input = english output. spanish input = spanish output.
-        Return valid JSON only. Do not include comments in the JSON response. No explanations. 
-        In case there is not enough information to extract the required fields, ONLY THEN it's acceptable to provide a non-valid JSON response.
+        2. MULTIPLE TASKS: "Work on app: add markdown, create daily system, improve mobile UI"
+        {{
+          "title": "App improvements",
+          "description": "#### App development\\n- [ ] Add markdown support\\n- [ ] Create daily system\\n- [ ] Improve mobile UI",
+          "due_date": null,
+          "rarity": "uncommon",
+          "quest_type": "regular",
+          "priority": 40
+        }}
+
+        Return valid JSON ONLY. Match input language in output.
         """
 
         try:
