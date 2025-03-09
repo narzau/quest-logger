@@ -45,8 +45,8 @@ class GoogleOAuthClient:
                 return Flow.from_client_secrets_file(
                     path,
                     scopes=[
-                      'https://www.googleapis.com/auth/calendar.readonly',
-                      'https://www.googleapis.com/auth/calendar.events'
+                        "https://www.googleapis.com/auth/calendar.readonly",
+                        "https://www.googleapis.com/auth/calendar.events",
                     ],
                     redirect_uri=redirect_uri,
                 )
@@ -104,8 +104,8 @@ class GoogleOAuthClient:
             client_id=client_id,
             client_secret=client_secret,
             scopes=[
-              'https://www.googleapis.com/auth/calendar.readonly',
-              'https://www.googleapis.com/auth/calendar.events'
+                "https://www.googleapis.com/auth/calendar.readonly",
+                "https://www.googleapis.com/auth/calendar.events",
             ],
         )
 
@@ -131,8 +131,8 @@ class GoogleOAuthClient:
                 client_id=client_id,
                 client_secret=client_secret,
                 scopes=[
-                  'https://www.googleapis.com/auth/calendar.readonly',
-                  'https://www.googleapis.com/auth/calendar.events'
+                    "https://www.googleapis.com/auth/calendar.readonly",
+                    "https://www.googleapis.com/auth/calendar.events",
                 ],
             )
 
@@ -165,21 +165,24 @@ class GoogleOAuthClient:
         if not access_token:
             logger.warning("No access token provided for revocation")
             return False
-        
+
         try:
             import requests
+
             response = requests.post(
-                'https://oauth2.googleapis.com/revoke',
-                params={'token': access_token},
-                headers={'content-type': 'application/x-www-form-urlencoded'}
+                "https://oauth2.googleapis.com/revoke",
+                params={"token": access_token},
+                headers={"content-type": "application/x-www-form-urlencoded"},
             )
-            
+
             # Check if revocation was successful
             if response.status_code == 200:
                 logger.info("Successfully revoked Google OAuth token")
                 return True
             else:
-                logger.error(f"Failed to revoke token: {response.status_code} {response.text}")
+                logger.error(
+                    f"Failed to revoke token: {response.status_code} {response.text}"
+                )
                 return False
         except Exception as e:
             logger.error(f"Error revoking Google OAuth token: {e}")

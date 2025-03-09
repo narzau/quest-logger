@@ -268,7 +268,9 @@ class QuestService:
 
         # Hard cap based on level - MUCH more conservative
         # Only 5% of level XP for most quests, max 10% for truly exceptional quests
-        xp_for_next_level = self.progression_service._calculate_xp_for_next_level(user_level)
+        xp_for_next_level = self.progression_service._calculate_xp_for_next_level(
+            user_level
+        )
         standard_cap = int(xp_for_next_level * 0.05)  # 5% of level XP
 
         # Exceptional quest cap (legendary + boss + max priority)
@@ -287,4 +289,3 @@ class QuestService:
 
         # Final capped value
         return max(min(calculated_xp, max_reward), min_reward)
-
