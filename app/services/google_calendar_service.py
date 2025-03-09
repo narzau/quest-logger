@@ -310,8 +310,16 @@ class GoogleCalendarService:
         integration = self.repository.get_by_user_id(user_id)
         if not integration:
             return False
-
+        
+        if integration.access_token:
+            revoked = GoogleOAuthClient.revoke_token(integration.access_token)
+            if not revoked:
+                logger.warning(f"Failed to revoke Google token for user {user_id}")
+        
         integration.is_active = False
         integration.connection_status = "disconnected"
+        integration.access_token = None 
+        integration.refresh_token = None
         self.repository.save(integration)
+        
         return True
