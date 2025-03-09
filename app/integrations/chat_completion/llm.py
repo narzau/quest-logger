@@ -202,11 +202,12 @@ class ChatCompletionService:
         - Next Sun: {next_weekday(current_time, 6)}
 
         Extract these fields in {language}:
-        - title: Brief task name (3-6 words)
+        - title: Brief task name (MAXIMUM 20 CHARACTERS. NOT MORE. WONT WORK OTHERWISE)
         - description: Format based on complexity:
           * FOR SINGLE TASKS: Just "#### Task details" with 1-2 sentences
           * FOR MULTIPLE TASKS: "#### Summary" followed by "- [ ] subtask1" etc.
-          * Always remove "I need to" and similar phrases
+          * FOR MULTIPLE TASKS: Sub tasks must be kept concise and brief to the point
+          * Always remove "I need to", "I have to", and similar phrases
         - due_date: ISO format (YYYY-MM-DDTHH:MM:SSZ)
           * IMPORTANT: If specific date mentioned (e.g., Monday, Friday, tomorrow), calculate correctly
           * If no time specified, use 23:59:59
