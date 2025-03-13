@@ -15,7 +15,7 @@ def read_user_achievements(
     skip: int = 0,
     limit: int = 100,
     current_user: models.User = Depends(deps.get_current_active_user),
-    achievement_service: AchievementService = Depends(deps.get_achievement_service),
+    achievement_service: AchievementService = Depends(deps.get_achievement_service()),
 ) -> Any:
     """
     Retrieve user's unlocked achievements.
@@ -27,7 +27,7 @@ def read_user_achievements(
 @router.get("/available", response_model=List[schemas.Achievement])
 def read_all_achievements(
     current_user: models.User = Depends(deps.get_current_active_user),
-    achievement_service: AchievementService = Depends(deps.get_achievement_service),
+    achievement_service: AchievementService = Depends(deps.get_achievement_service()),
 ) -> Any:
     """
     Retrieve all available achievements.
