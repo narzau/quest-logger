@@ -8,3 +8,13 @@ from app.models.achievement import (
     UserAchievementProgress,
 )
 from app.models.google_calendar import GoogleCalendarIntegration
+from app.models.note import Note, NoteStyle
+from app.models.subscription import (
+    Subscription,
+    Invoice,
+    PaymentMethod,
+    PromotionalCode,
+    BillingCycle,
+    PaymentStatus,
+    SubscriptionStatus,
+)

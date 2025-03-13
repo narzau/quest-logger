@@ -55,15 +55,13 @@ class QuestRepository(BaseRepository[Quest]):
     def update_quest(self, quest: Quest, quest_data: schemas.QuestUpdate) -> Quest:
         """Update an existing quest."""
         quest_data_dict = quest_data.dict(exclude_unset=True)
-        print(quest_data_dict)
         for field, value in quest_data_dict.items():
             if hasattr(quest, field):
                 setattr(quest, field, value)
-        print("asdasd")
+
         self.db.add(quest)
         self.db.commit()
         self.db.refresh(quest)
-        print(quest.__dict__)
         return quest
 
     def delete_quest(self, quest: Quest) -> bool:

@@ -14,6 +14,10 @@ from deepgram import (
     FileSource,
 )
 
+import logging
+
+logger = logging.getLogger(__name__)
+
 
 class DeepgramSTTService(BaseSTTService):
     """
@@ -30,7 +34,7 @@ class DeepgramSTTService(BaseSTTService):
     async def transcribe(
         self,
         audio_file: UploadFile,
-        language: Optional[str],
+        language: Optional[str] = None,
     ) -> TranscriptionResult:
         """
         Transcribe audio using Deepgram SDK
@@ -38,6 +42,7 @@ class DeepgramSTTService(BaseSTTService):
         Note: translate_to_english parameter is ignored as we delegate translation
         to the LLM service instead
         """
+        temp_file_path = None
         try:
             # Save uploaded file to a temporary location
             temp_file_path = await self.save_upload_file_temp(audio_file)
@@ -63,16 +68,20 @@ class DeepgramSTTService(BaseSTTService):
                 detect_language=True if not language else False,
             )
 
-            # Call Deepgram API
-            print(options)
+            # Log at debug level
+            logger.debug(f"Deepgram transcription options: {options}")
 
+            # Call Deepgram API with timeout from settings
             response = self.client.listen.rest.v("1").transcribe_file(
-                payload, options, timeout=60
+                payload, options, timeout=settings.STT_TIMEOUT
             )
 
             # Extract results from response
             results = response.results
-            print(results, "results deep ram")
+
+            # Log detailed results at debug level only
+            logger.debug(f"Deepgram transcription completed successfully")
+
             # Get the channels data (we'll use the first channel)
             if not results.channels or len(results.channels) == 0:
                 return TranscriptionResult(text="", raw_response=results.to_dict())
@@ -93,15 +102,27 @@ class DeepgramSTTService(BaseSTTService):
                 alternative.confidence if hasattr(alternative, "confidence") else None
             )
 
+            # Get detected language if available
+            detected_language = (
+                results.metadata.detected_language
+                if hasattr(results, "metadata")
+                and hasattr(results.metadata, "detected_language")
+                else language
+            )
+
             return TranscriptionResult(
                 text=transcript,
-                language=language,
+                language=detected_language,
                 confidence=confidence,
                 translation=None,  # No translation from Deepgram
                 raw_response=results.to_dict(),
             )
 
+        except Exception as e:
+            print(f"Error in Deepgram transcription: {str(e)}")
+            raise e
+
         finally:
             # Clean up the temporary file
-            if os.path.exists(temp_file_path):
+            if temp_file_path and os.path.exists(temp_file_path):
                 os.unlink(temp_file_path)

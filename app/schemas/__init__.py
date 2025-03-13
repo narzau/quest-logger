@@ -15,3 +15,18 @@ from app.schemas.achievement import (
     UserAchievement,
     UserAchievementCreate,
 )
+from app.schemas.note import (
+    Note,
+    NoteCreate,
+    NoteUpdate,
+    VoiceNoteCreate,
+    VoiceNoteResult,
+    NoteExport,
+    NoteList,
+)
+from app.schemas.subscription import (
+    Subscription,
+    SubscriptionCreate,
+    SubscriptionUpdate,
+    SubscriptionStatus,
+)

@@ -52,3 +52,4 @@ class Quest(Base):
     # Relationships
     owner = relationship("User", back_populates="quests")
     sub_quests = relationship("Quest", backref="parent_quest", remote_side=[id])
+    notes = relationship("Note", back_populates="quest")

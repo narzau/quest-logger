@@ -19,7 +19,8 @@ var/
 *.egg-info/
 .installed.cfg
 *.egg
-
+.cursor
+postman/
 # Google
 client_secret*
 

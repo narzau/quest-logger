@@ -7,6 +7,8 @@ from app.api.routes import (
     quests,
     achievements,
     google_auth,
+    notes,
+    subscription,
 )
 from app.core.config import settings
 
@@ -19,4 +21,8 @@ api_router.include_router(
 )
 api_router.include_router(
     google_auth.router, prefix="/auth/google", tags=["google_auth"]
+)
+api_router.include_router(notes.router, prefix="/notes", tags=["notes"])
+api_router.include_router(
+    subscription.router, prefix="/subscription", tags=["subscription"]
 )

@@ -19,8 +19,15 @@ class User(Base):
 
     # Relationships
     quests = relationship("Quest", back_populates="owner")
+    notes = relationship("Note", back_populates="owner")
     achievements = relationship("UserAchievement", back_populates="user")
     achievement_progress = relationship("UserAchievementProgress")
     google_calendar_integration = relationship(
         "GoogleCalendarIntegration", back_populates="user", cascade="all, delete-orphan"
+    )
+    subscription = relationship(
+        "Subscription",
+        back_populates="user",
+        uselist=False,
+        cascade="all, delete-orphan",
     )

@@ -61,14 +61,21 @@ class BaseSTTService(ABC):
         Save an upload file to a temporary file and return the path
         """
         try:
-            suffix = (
-                os.path.splitext(upload_file.filename)[1]
-                if upload_file.filename
-                else ""
-            )
-            with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as temp:
-                content = await upload_file.read()
-                temp.write(content)
-                return temp.name
+            # Handle the case when upload_file is a FastAPI UploadFile
+            if hasattr(upload_file, "filename") and hasattr(upload_file, "read"):
+                suffix = (
+                    os.path.splitext(upload_file.filename)[1]
+                    if upload_file.filename
+                    else ""
+                )
+                with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as temp:
+                    content = await upload_file.read()
+                    temp.write(content)
+                    return temp.name
+            # Handle the case when upload_file is a regular file object
+            else:
+                raise ValueError("Expected UploadFile object, got something else")
         finally:
-            await upload_file.seek(0)  # Reset file pointer
+            # Reset the file pointer for UploadFile objects
+            if hasattr(upload_file, "seek") and callable(upload_file.seek):
+                await upload_file.seek(0)  # Reset file pointer

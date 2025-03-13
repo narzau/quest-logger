@@ -1,12 +1,16 @@
 # app/services/llm_service.py
 import json
+import asyncio
 from typing import Dict, Any, Optional, List
 from pydantic import BaseModel
 from openai import OpenAI, AsyncOpenAI
+import logging
 
 from app.schemas.quest import QuestCreate
 from app.models.quest import QuestRarity, QuestType
 from app.core.config import settings
+
+logger = logging.getLogger(__name__)
 
 
 class LLMProvider(BaseModel):
@@ -54,46 +58,91 @@ class ChatCompletionService:
     async def call_llm_api(
         self,
         prompt: str,
-        system_prompt: str,
-        model: Optional[str] = None,
+        system_prompt: str = "You are a helpful assistant.",
         temperature: float = 0.7,
-        max_tokens: Optional[int] = None,
         json_response: bool = False,
-    ) -> str:
+        model: Optional[str] = None,
+    ) -> Optional[str]:
         """
-        Make a generic call to the LLM API using OpenAI SDK
+        Call the LLM API with the given prompt.
+
+        Args:
+            prompt: User prompt to send to the LLM
+            system_prompt: System instructions for the LLM
+            temperature: Temperature parameter for response randomness
+            json_response: Whether to request a JSON response
+            model: Specific model to use, or None for default
+
+        Returns:
+            Response text from the LLM, or None if an error occurred
         """
-        model = model or self.provider.default_model
+        from app.utils.timeout import with_timeout
+        from app.core.exceptions import ProcessingException
 
-        # Prepare extra headers if using OpenRouter
-        extra_headers = {}
-        if self.provider.name == "openrouter":
-            extra_headers = {
-                "HTTP-Referer": str(settings.SERVER_HOST),  # Convert to string
-                "X-Title": "ADHD Quest Tracker",
-            }
+        if not settings.ENABLE_LLM_FEATURES:
+            logger.warning("LLM features are disabled in settings")
+            return None
 
-        # Prepare messages
+        if not model:
+            model = settings.OPENROUTER_DEFAULT_MODEL
+
         messages = [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": prompt},
         ]
 
-        # Prepare response format if JSON is requested
-        response_format = {"type": "json_object"} if json_response else None
+        try:
+            headers = {
+                "Authorization": f"Bearer {settings.OPENROUTER_API_KEY}",
+            }
 
-        # Make the API call
-        response = await self.client.chat.completions.create(
-            model=model,
-            messages=messages,
-            temperature=temperature,
-            max_tokens=max_tokens,
-            response_format=response_format,
-            extra_headers=extra_headers,
-        )
+            json_format_text = ""
+            if json_response:
+                json_format_text = "You must respond with a JSON object, nothing else."
+                messages[0]["content"] = f"{system_prompt} {json_format_text}"
+                # Add JSON response formatting
+                headers["HTTP-Referer"] = "https://questlogger.app"
+                headers["X-Title"] = "Quest Logger"
 
-        # Extract and return content
-        return response.choices[0].message.content or ""
+            logger.info(
+                f"Calling LLM API with model: {model}, json_response: {json_response}"
+            )
+
+            # Use the async client that was initialized in __init__
+            try:
+                # Use AsyncOpenAI client for proper async operation
+                response = await self.client.chat.completions.create(
+                    model=model,
+                    messages=messages,
+                    temperature=temperature,
+                    response_format={"type": "json_object"} if json_response else None,
+                    timeout=settings.LLM_TIMEOUT,
+                )
+
+                # Extract the response text
+                content = response.choices[0].message.content
+
+                if json_response:
+                    # Validate JSON format for json_response=True
+                    try:
+                        json.loads(content)
+                    except json.JSONDecodeError:
+                        logger.error(
+                            f"Invalid JSON response from LLM: {content[:100]}..."
+                        )
+                        return None
+
+                return content
+            except asyncio.TimeoutError:
+                logger.error(f"LLM API call timed out (limit: {settings.LLM_TIMEOUT}s)")
+                raise ProcessingException("LLM API call timed out")
+
+        except ProcessingException as e:
+            # Already logged in timeout utility
+            return None
+        except Exception as e:
+            logger.error(f"Error calling LLM API: {str(e)}", exc_info=True)
+            return None
 
     async def translate_text(
         self, text: str, source_language: str, target_language: str = "english"
@@ -254,7 +303,9 @@ class ChatCompletionService:
             )
 
             # Parse the JSON response
-            print(response)
+            if settings.ENVIRONMENT != "production":
+                logger.debug(f"LLM response for quest parsing: {response}")
+
             quest_data = json.loads(response)
 
             # Safely handle enum conversions with case insensitivity
@@ -262,6 +313,9 @@ class ChatCompletionService:
                 try:
                     quest_data["rarity"] = QuestRarity(quest_data["rarity"].lower())
                 except (ValueError, KeyError):
+                    logger.warning(
+                        f"Invalid rarity value in LLM response: {quest_data.get('rarity')}, defaulting to COMMON"
+                    )
                     quest_data["rarity"] = QuestRarity.COMMON
 
             if "quest_type" in quest_data:
@@ -270,6 +324,9 @@ class ChatCompletionService:
                         quest_data["quest_type"].lower()
                     )
                 except (ValueError, KeyError):
+                    logger.warning(
+                        f"Invalid quest_type value in LLM response: {quest_data.get('quest_type')}, defaulting to REGULAR"
+                    )
                     quest_data["quest_type"] = QuestType.REGULAR
 
             # Ensure due_date is parsed as UTC datetime or None

@@ -1,8 +1,8 @@
-"""add user integrations
+"""initial
 
-Revision ID: 4c70d044072b
+Revision ID: df78e43471b9
 Revises: 
-Create Date: 2025-03-08 00:12:50.819242
+Create Date: 2025-03-13 19:44:18.048434
 
 """
 from typing import Sequence, Union
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = '4c70d044072b'
+revision: str = 'df78e43471b9'
 down_revision: Union[str, None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -31,6 +31,23 @@ def upgrade() -> None:
     )
     op.create_index(op.f('ix_achievements_id'), 'achievements', ['id'], unique=False)
     op.create_index(op.f('ix_achievements_name'), 'achievements', ['name'], unique=False)
+    op.create_table('promotional_codes',
+    sa.Column('id', sa.Integer(), nullable=False),
+    sa.Column('code', sa.String(), nullable=True),
+    sa.Column('description', sa.String(), nullable=True),
+    sa.Column('percent_off', sa.Float(), nullable=True),
+    sa.Column('amount_off', sa.Float(), nullable=True),
+    sa.Column('duration', sa.String(), nullable=True),
+    sa.Column('duration_in_months', sa.Integer(), nullable=True),
+    sa.Column('max_redemptions', sa.Integer(), nullable=True),
+    sa.Column('times_redeemed', sa.Integer(), nullable=True),
+    sa.Column('is_active', sa.Boolean(), nullable=True),
+    sa.Column('created_at', sa.DateTime(), nullable=True),
+    sa.Column('expires_at', sa.DateTime(), nullable=True),
+    sa.PrimaryKeyConstraint('id')
+    )
+    op.create_index(op.f('ix_promotional_codes_code'), 'promotional_codes', ['code'], unique=True)
+    op.create_index(op.f('ix_promotional_codes_id'), 'promotional_codes', ['id'], unique=False)
     op.create_table('users',
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('email', sa.String(), nullable=False),
@@ -43,7 +60,7 @@ def upgrade() -> None:
     )
     op.create_index(op.f('ix_users_email'), 'users', ['email'], unique=True)
     op.create_index(op.f('ix_users_id'), 'users', ['id'], unique=False)
-    op.create_index(op.f('ix_users_username'), 'users', ['username'], unique=True)
+    op.create_index(op.f('ix_users_username'), 'users', ['username'], unique=False)
     op.create_table('achievement_criteria',
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('achievement_id', sa.Integer(), nullable=True),
@@ -94,6 +111,28 @@ def upgrade() -> None:
     )
     op.create_index(op.f('ix_quests_id'), 'quests', ['id'], unique=False)
     op.create_index(op.f('ix_quests_title'), 'quests', ['title'], unique=False)
+    op.create_table('subscriptions',
+    sa.Column('id', sa.Integer(), nullable=False),
+    sa.Column('user_id', sa.Integer(), nullable=False),
+    sa.Column('billing_cycle', sa.String(), nullable=True),
+    sa.Column('stripe_subscription_id', sa.String(), nullable=True),
+    sa.Column('stripe_customer_id', sa.String(), nullable=True),
+    sa.Column('status', sa.String(), nullable=True),
+    sa.Column('current_period_start', sa.DateTime(), nullable=True),
+    sa.Column('current_period_end', sa.DateTime(), nullable=True),
+    sa.Column('trial_end', sa.DateTime(), nullable=True),
+    sa.Column('total_minutes_used_this_month', sa.Float(), nullable=True),
+    sa.Column('monthly_minutes_limit', sa.Float(), nullable=True),
+    sa.Column('allow_sharing', sa.Boolean(), nullable=True),
+    sa.Column('allow_exporting', sa.Boolean(), nullable=True),
+    sa.Column('priority_processing', sa.Boolean(), nullable=True),
+    sa.Column('advanced_ai_features', sa.Boolean(), nullable=True),
+    sa.Column('created_at', sa.DateTime(), nullable=True),
+    sa.Column('updated_at', sa.DateTime(), nullable=True),
+    sa.ForeignKeyConstraint(['user_id'], ['users.id'], ondelete='CASCADE'),
+    sa.PrimaryKeyConstraint('id')
+    )
+    op.create_index(op.f('ix_subscriptions_id'), 'subscriptions', ['id'], unique=False)
     op.create_table('user_achievements',
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('user_id', sa.Integer(), nullable=True),
@@ -105,6 +144,62 @@ def upgrade() -> None:
     sa.PrimaryKeyConstraint('id')
     )
     op.create_index(op.f('ix_user_achievements_id'), 'user_achievements', ['id'], unique=False)
+    op.create_table('invoices',
+    sa.Column('id', sa.Integer(), nullable=False),
+    sa.Column('subscription_id', sa.Integer(), nullable=False),
+    sa.Column('stripe_invoice_id', sa.String(), nullable=True),
+    sa.Column('amount_due', sa.Float(), nullable=True),
+    sa.Column('amount_paid', sa.Float(), nullable=True),
+    sa.Column('status', sa.String(), nullable=True),
+    sa.Column('invoice_pdf', sa.String(), nullable=True),
+    sa.Column('created_at', sa.DateTime(), nullable=True),
+    sa.Column('paid_at', sa.DateTime(), nullable=True),
+    sa.ForeignKeyConstraint(['subscription_id'], ['subscriptions.id'], ondelete='CASCADE'),
+    sa.PrimaryKeyConstraint('id')
+    )
+    op.create_index(op.f('ix_invoices_id'), 'invoices', ['id'], unique=False)
+    op.create_table('notes',
+    sa.Column('id', sa.Integer(), nullable=False),
+    sa.Column('title', sa.String(), nullable=True),
+    sa.Column('content', sa.Text(), nullable=True),
+    sa.Column('raw_transcript', sa.Text(), nullable=True),
+    sa.Column('audio_url', sa.String(), nullable=True),
+    sa.Column('audio_duration', sa.Float(), nullable=True),
+    sa.Column('language', sa.String(), nullable=True),
+    sa.Column('note_style', sa.Enum('STANDARD', 'BULLET_POINTS', 'SUMMARY', 'ACTION_ITEMS', 'CUSTOM', 'BLOG_POST', 'VIDEO_SCRIPT', 'SOCIAL_MEDIA_POST', 'TASK_LIST', 'MEETING_NOTES', 'EMAIL_DRAFT', 'CREATIVE_WRITING', 'CODE_DOCUMENTATION', 'NEWSLETTER', 'ACADEMIC_PAPER', name='notestyle'), nullable=True),
+    sa.Column('is_public', sa.Boolean(), nullable=True),
+    sa.Column('public_share_id', sa.String(), nullable=True),
+    sa.Column('tags', sa.Text(), nullable=True),
+    sa.Column('folder', sa.String(), nullable=True),
+    sa.Column('created_at', sa.DateTime(), nullable=True),
+    sa.Column('updated_at', sa.DateTime(), nullable=True),
+    sa.Column('owner_id', sa.Integer(), nullable=True),
+    sa.Column('quest_id', sa.Integer(), nullable=True),
+    sa.Column('ai_processed', sa.Boolean(), nullable=True),
+    sa.Column('ai_summary', sa.Text(), nullable=True),
+    sa.Column('extracted_action_items', sa.Text(), nullable=True),
+    sa.ForeignKeyConstraint(['owner_id'], ['users.id'], ),
+    sa.ForeignKeyConstraint(['quest_id'], ['quests.id'], ),
+    sa.PrimaryKeyConstraint('id'),
+    sa.UniqueConstraint('public_share_id')
+    )
+    op.create_index(op.f('ix_notes_id'), 'notes', ['id'], unique=False)
+    op.create_index(op.f('ix_notes_title'), 'notes', ['title'], unique=False)
+    op.create_table('payment_methods',
+    sa.Column('id', sa.Integer(), nullable=False),
+    sa.Column('subscription_id', sa.Integer(), nullable=False),
+    sa.Column('stripe_payment_method_id', sa.String(), nullable=True),
+    sa.Column('brand', sa.String(), nullable=True),
+    sa.Column('last4', sa.String(), nullable=True),
+    sa.Column('exp_month', sa.Integer(), nullable=True),
+    sa.Column('exp_year', sa.Integer(), nullable=True),
+    sa.Column('is_default', sa.Boolean(), nullable=True),
+    sa.Column('created_at', sa.DateTime(), nullable=True),
+    sa.Column('updated_at', sa.DateTime(), nullable=True),
+    sa.ForeignKeyConstraint(['subscription_id'], ['subscriptions.id'], ondelete='CASCADE'),
+    sa.PrimaryKeyConstraint('id')
+    )
+    op.create_index(op.f('ix_payment_methods_id'), 'payment_methods', ['id'], unique=False)
     op.create_table('user_achievement_progress',
     sa.Column('user_id', sa.Integer(), nullable=False),
     sa.Column('criterion_id', sa.Integer(), nullable=False),
@@ -120,8 +215,17 @@ def upgrade() -> None:
 def downgrade() -> None:
     # ### commands auto generated by Alembic - please adjust! ###
     op.drop_table('user_achievement_progress')
+    op.drop_index(op.f('ix_payment_methods_id'), table_name='payment_methods')
+    op.drop_table('payment_methods')
+    op.drop_index(op.f('ix_notes_title'), table_name='notes')
+    op.drop_index(op.f('ix_notes_id'), table_name='notes')
+    op.drop_table('notes')
+    op.drop_index(op.f('ix_invoices_id'), table_name='invoices')
+    op.drop_table('invoices')
     op.drop_index(op.f('ix_user_achievements_id'), table_name='user_achievements')
     op.drop_table('user_achievements')
+    op.drop_index(op.f('ix_subscriptions_id'), table_name='subscriptions')
+    op.drop_table('subscriptions')
     op.drop_index(op.f('ix_quests_title'), table_name='quests')
     op.drop_index(op.f('ix_quests_id'), table_name='quests')
     op.drop_table('quests')
@@ -133,6 +237,9 @@ def downgrade() -> None:
     op.drop_index(op.f('ix_users_id'), table_name='users')
     op.drop_index(op.f('ix_users_email'), table_name='users')
     op.drop_table('users')
+    op.drop_index(op.f('ix_promotional_codes_id'), table_name='promotional_codes')
+    op.drop_index(op.f('ix_promotional_codes_code'), table_name='promotional_codes')
+    op.drop_table('promotional_codes')
     op.drop_index(op.f('ix_achievements_name'), table_name='achievements')
     op.drop_index(op.f('ix_achievements_id'), table_name='achievements')
     op.drop_table('achievements')

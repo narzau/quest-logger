@@ -1,12 +1,15 @@
 # app/core/config.py
 import secrets
-from typing import Any, List, Optional, Union, Dict
+from typing import Any, List, Optional, Union, Dict, Literal
 
 from pydantic import AnyHttpUrl, field_validator, PostgresDsn
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
+    # Environment settings
+    ENVIRONMENT: Literal["development", "testing", "production"] = "development"
+
     # API settings
     API_V1_STR: str = "/api/v1"
     SECRET_KEY: str = secrets.token_urlsafe(32)
@@ -15,6 +18,8 @@ class Settings(BaseSettings):
     # Server settings
     SERVER_NAME: str = "localhost"
     SERVER_HOST: str = "http://localhost:8000"
+    FRONTEND_URL: str = "http://localhost:3000"  # Frontend URL for share links
+
     # CORS settings
     BACKEND_CORS_ORIGINS: List[str] = [
         "http://localhost",
@@ -30,6 +35,10 @@ class Settings(BaseSettings):
             return v
         raise ValueError(v)
 
+    # Logging settings
+    LOG_LEVEL: str = "INFO"
+    LOG_FILE: Optional[str] = None  # Path to log file if file logging is enabled
+
     # Database settings
     SQLALCHEMY_DATABASE_URI: str
 
@@ -41,6 +50,11 @@ class Settings(BaseSettings):
     BASE_XP_REGULAR_QUEST: int = 10
     BASE_XP_EPIC_QUEST: int = 25
     BASE_XP_BOSS_QUEST: int = 50
+
+    # API Call Timeouts (in seconds)
+    DEFAULT_TIMEOUT: int = 30
+    LLM_TIMEOUT: int = 60
+    STT_TIMEOUT: int = 120
 
     # Speech-to-Text settings
     DEFAULT_STT_PROVIDER: str = "deepgram"  # Default provider
@@ -65,6 +79,11 @@ class Settings(BaseSettings):
     GOOGLE_CLIENT_ID: str = ""
     GOOGLE_CLIENT_SECRET: str = ""
     GOOGLE_CLIENT_SECRETS_JSON: str = ""
+
+    # Subscription Settings
+    STRIPE_API_KEY: Optional[str] = None
+    STRIPE_WEBHOOK_SECRET: Optional[str] = None
+    STRIPE_PRO_PRICE_ID: Optional[str] = None
 
     # Use SettingsConfigDict instead of Config class
     model_config = SettingsConfigDict(
