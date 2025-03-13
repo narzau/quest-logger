@@ -83,8 +83,8 @@ register_middlewares(app)
 
 # Set up CORS middleware
 if settings.BACKEND_CORS_ORIGINS:
-    #allowed_origins = [str(origin) for origin in settings.BACKEND_CORS_ORIGINS]
-    #logger.info(f"Setting up CORS with allowed origins: {allowed_origins}")
+    # allowed_origins = [str(origin) for origin in settings.BACKEND_CORS_ORIGINS]
+    # logger.info(f"Setting up CORS with allowed origins: {allowed_origins}")
 
     app.add_middleware(
         CORSMiddleware,

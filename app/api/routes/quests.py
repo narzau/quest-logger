@@ -70,7 +70,7 @@ def create_quest(
         logger.info(f"User {current_user.id} creating quest: {quest_in.title}")
         try:
             return quest_service.create_quest(
-                user_id=current_user.id, quest_in=quest_in
+                user_id=current_user.id, quest_data=quest_in
             )
         except BusinessException as e:
             logger.warning(f"Error creating quest: {str(e)}")
@@ -92,7 +92,7 @@ def update_quest(
         logger.info(f"User {current_user.id} updating quest {quest_id}")
         try:
             return quest_service.update_quest(
-                user_id=current_user.id, quest_id=quest_id, quest_in=quest_in
+                user_id=current_user.id, quest_id=quest_id, update_data=quest_in
             )
         except BusinessException as e:
             logger.warning(f"Error updating quest {quest_id}: {str(e)}")
@@ -103,7 +103,7 @@ def update_quest(
 def read_quest(
     *,
     quest_id: int,
-    current_user=Depends(deps.get_current_active_user),
+    current_user: models.User = Depends(deps.get_current_active_user),
     quest_service: QuestService = Depends(deps.get_quest_service()),
 ) -> Any:
     """
@@ -254,8 +254,7 @@ async def suggest_quest_from_voice(
         )
 
         try:
-            return await quest_service.suggest_quest_from_audio(
-                user_id=current_user.id,
+            return await quest_service.suggest_quest_from_voice(
                 audio_file=audio_file,
                 language=language,
             )

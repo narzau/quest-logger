@@ -25,7 +25,20 @@ class UserRepository:
         self.db.refresh(user)
         return user
 
-    def create_user(self, create_data: schemas.UserCreate):
+    def update_me(
+        self, user: models.User, update_data: schemas.UserUpdate
+    ) -> models.User:
+        """Update user and persist changes."""
+        update_user_dict = update_data.model_dump(exclude_unset=True)
+        for field, value in update_user_dict.items():
+            if hasattr(user, field):
+                setattr(user, field, value)
+        self.db.add(user)
+        self.db.commit()
+        self.db.refresh(user)
+        return user
+
+    def create_user(self, create_data: schemas.UserCreate) -> models.User:
         user = models.User(
             email=create_data.email,
             username=create_data.username,

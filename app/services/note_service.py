@@ -27,7 +27,6 @@ class NoteService:
     """Service for note operations."""
 
     def __init__(self, db: Session):
-        self.db = db
         self.repository = NoteRepository(db)
         self.subscription_repository = SubscriptionRepository(db)
         self.speech_service = get_stt_service()

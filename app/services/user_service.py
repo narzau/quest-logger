@@ -5,7 +5,7 @@ import logging
 
 from app import models, schemas
 from app.repositories.user_repository import UserRepository
-from app.core.exceptions import DuplicateResourceException
+from app.core.exceptions import DuplicateResourceException, ResourceNotFoundException
 
 logger = logging.getLogger(__name__)
 
@@ -84,6 +84,12 @@ class UserService:
 
     def update(self, user: models.User):
         return self.repository.update(user)
+
+    def update_me(self, user_id: int, update_data: schemas.UserUpdate):
+        user = self.repository.get_by_id(user_id)
+        if not user:
+            raise ResourceNotFoundException(f"User with ID {user_id} not found")
+        return self.repository.update_me(user, update_data)
 
     def create_user(self, create_data: schemas.UserCreate):
         existing_email = self.repository.get_by_email(create_data.email)

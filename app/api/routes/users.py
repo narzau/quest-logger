@@ -75,7 +75,7 @@ def update_user_me(
     try:
         with log_context(user_id=current_user.id, action="update_user"):
             logger.info(f"User {current_user.id} updating their profile")
-            return user_service.update(current_user)
+            return user_service.update_me(user_id=current_user.id, update_data=user_in)
     except BusinessException as e:
         logger.warning(f"Error updating user {current_user.id}: {str(e)}")
         raise HTTPException(status_code=400, detail=str(e))

@@ -9,6 +9,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     # Environment settings
     ENVIRONMENT: Literal["development", "testing", "production"] = "development"
+    DEBUG: bool = False
 
     # API settings
     API_V1_STR: str = "/api/v1"

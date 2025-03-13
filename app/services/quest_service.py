@@ -148,7 +148,7 @@ class QuestService:
         # Delete quest
         return self.repository.delete_quest(quest)
 
-    async def create_quest_from_audio(
+    async def create_quest_from_voice(
         self,
         user_id: int,
         audio_file: File,
@@ -196,7 +196,7 @@ class QuestService:
         logger.info(f"Quest created successfully with ID {quest.id}")
         return quest
 
-    async def suggest_quest_from_audio(
+    async def suggest_quest_from_voice(
         self,
         audio_file: File,
         language: str,
