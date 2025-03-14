@@ -1,5 +1,6 @@
 from typing import Dict, Any, Optional, List
 from datetime import datetime
+import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Body, Request
 from sqlalchemy.orm import Session
@@ -9,6 +10,8 @@ from app.models import User
 from app.services.subscription_service import SubscriptionService
 from app.core.config import settings
 from app.core.constants import SubscriptionStatus, BillingCycle, FeatureFlag
+from app.core.exceptions import ValidationException
+from app.core.logging import log_context
 
 router = APIRouter()
 
@@ -32,7 +35,7 @@ async def get_pricing(
 
 @router.post("/subscribe")
 async def subscribe(
-    billing_cycle: str = Body(BillingCycle.MONTHLY, embed=True),
+    billing_cycle: str = Body(BillingCycle.MONTHLY.value, embed=True),
     trial: bool = Body(False, embed=True),
     promotional_code: Optional[str] = Body(None, embed=True),
     payment_method_id: Optional[str] = Body(None, embed=True),
@@ -40,8 +43,11 @@ async def subscribe(
     current_user: User = Depends(get_current_user),
 ):
     """Subscribe to the paid tier"""
-    if billing_cycle not in [BillingCycle.MONTHLY, BillingCycle.ANNUAL]:
-        raise HTTPException(status_code=400, detail="Invalid billing cycle")
+    # Validate billing_cycle using the enum
+    try:
+        billing_cycle_enum = BillingCycle(billing_cycle)
+    except ValueError:
+        raise ValidationException(f"Invalid billing cycle: {billing_cycle}", details={"valid_values": [e.value for e in BillingCycle]})
 
     # Require payment method for subscription unless it's a trial
     if not payment_method_id and not trial:
@@ -53,7 +59,7 @@ async def subscribe(
         current_user.id,
         current_user.email,
         current_user.username or f"User {current_user.id}",
-        billing_cycle,
+        billing_cycle_enum,
         trial,
         promotional_code,
         payment_method_id,
@@ -98,10 +104,13 @@ async def change_billing_cycle(
     current_user: User = Depends(get_current_user),
 ):
     """Change billing cycle (monthly/annual)"""
-    if new_cycle not in [BillingCycle.MONTHLY, BillingCycle.ANNUAL]:
-        raise HTTPException(status_code=400, detail="Invalid billing cycle")
+    # Validate new_cycle using the enum
+    try:
+        new_cycle_enum = BillingCycle(new_cycle)
+    except ValueError:
+        raise ValidationException(f"Invalid billing cycle: {new_cycle}", details={"valid_values": [e.value for e in BillingCycle]})
 
-    return await subscription_service.change_billing_cycle(current_user.id, new_cycle)
+    return await subscription_service.change_billing_cycle(current_user.id, new_cycle_enum)
 
 
 @router.post("/apply-promo")

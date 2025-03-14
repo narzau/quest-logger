@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.schemas.note import NoteCreate, NoteUpdate, VoiceNoteCreate, NoteExport
 from app.models import Note
-from app.models.note import NoteStyle
+from app.models.note import NoteStyle, NoteExportFormat
 from app.repositories.note_repository import NoteRepository
 from app.repositories.subscription_repository import SubscriptionRepository
 from app.integrations.speech import get_stt_service
@@ -491,7 +491,7 @@ class NoteService:
             )
 
     async def export_note(
-        self, user_id: int, note_id: int, format: str = "text"
+        self, user_id: int, note_id: int, format: NoteExportFormat = NoteExportFormat.TEXT
     ) -> Dict[str, Any]:
         """Export a note in the specified format (text, markdown, pdf)"""
         note = self.repository.get_user_note(user_id, note_id)
@@ -509,8 +509,7 @@ class NoteService:
                 status_code=403, detail="Exporting is only available on Pro plan"
             )
 
-        # For now, just return the note content
-        # In a real implementation, this would format and return the appropriate file
+        # Create the note export data
         note_export = NoteExport(
             title=note.title,
             content=note.content or "",
@@ -521,12 +520,196 @@ class NoteService:
             extracted_action_items=note.extracted_action_items,
         )
 
-        logger.info(f"Note {note_id} exported in {format} format by user {user_id}")
+        # Format for filename
+        safe_title = note.title.lower().replace(' ', '_')
+        timestamp = datetime.now().strftime('%Y%m%d')
+        filename_base = f"{safe_title}_{timestamp}"
+
+        # Format content based on requested export format
+        if format == NoteExportFormat.TEXT:
+            # Simple text format
+            content = self._format_note_as_text(note_export)
+            content_type = "text/plain"
+            filename = f"{filename_base}.txt"
+        
+        elif format == NoteExportFormat.MARKDOWN:
+            # Markdown format
+            content = self._format_note_as_markdown(note_export)
+            content_type = "text/markdown"
+            filename = f"{filename_base}.md"
+        
+        elif format == NoteExportFormat.PDF:
+            # PDF format (requires additional processing)
+            try:
+                content = self._generate_pdf(note_export)
+                content_type = "application/pdf"
+                filename = f"{filename_base}.pdf"
+            except Exception as e:
+                logger.error(f"PDF generation failed: {str(e)}", exc_info=True)
+                raise HTTPException(
+                    status_code=500, 
+                    detail="Failed to generate PDF. Please try another format."
+                )
+        
+        logger.info(f"Note {note_id} exported in {format.value} format by user {user_id}")
+        
+        # Return the formatted content and metadata
         return {
-            "format": format,
-            "note": note_export,
-            "filename": f"{note.title.lower().replace(' ', '_')}_{datetime.now().strftime('%Y%m%d')}",
+            "content": content,
+            "filename": filename,
+            "content_type": content_type,
+            "format": format.value
         }
+
+    def _format_note_as_text(self, note_export: NoteExport) -> str:
+        """Format note as plain text"""
+        lines = []
+        lines.append(f"Title: {note_export.title}")
+        lines.append(f"Created: {note_export.created_at.strftime('%Y-%m-%d %H:%M:%S')}")
+        lines.append(f"Updated: {note_export.updated_at.strftime('%Y-%m-%d %H:%M:%S')}")
+        
+        if note_export.tags:
+            lines.append(f"Tags: {note_export.tags}")
+        
+        lines.append("\n" + "=" * 40 + "\n")
+        
+        if note_export.ai_summary:
+            lines.append("SUMMARY")
+            lines.append("-" * 40)
+            lines.append(note_export.ai_summary)
+            lines.append("\n" + "=" * 40 + "\n")
+        
+        lines.append("CONTENT")
+        lines.append("-" * 40)
+        lines.append(note_export.content)
+        
+        if note_export.extracted_action_items:
+            lines.append("\n" + "=" * 40 + "\n")
+            lines.append("ACTION ITEMS")
+            lines.append("-" * 40)
+            lines.append(note_export.extracted_action_items)
+        
+        return "\n".join(lines)
+
+    def _format_note_as_markdown(self, note_export: NoteExport) -> str:
+        """Format note as markdown"""
+        lines = []
+        lines.append(f"# {note_export.title}")
+        lines.append(f"*Created: {note_export.created_at.strftime('%Y-%m-%d %H:%M:%S')}*")
+        lines.append(f"*Updated: {note_export.updated_at.strftime('%Y-%m-%d %H:%M:%S')}*")
+        
+        if note_export.tags:
+            lines.append(f"\n**Tags**: {note_export.tags}")
+        
+        lines.append("\n---\n")
+        
+        if note_export.ai_summary:
+            lines.append("## Summary")
+            lines.append(note_export.ai_summary)
+            lines.append("\n---\n")
+        
+        lines.append("## Content")
+        lines.append(note_export.content)
+        
+        if note_export.extracted_action_items:
+            lines.append("\n---\n")
+            lines.append("## Action Items")
+            lines.append(note_export.extracted_action_items)
+        
+        return "\n".join(lines)
+
+    def _generate_pdf(self, note_export: NoteExport) -> bytes:
+        """Generate PDF from note data"""
+        try:
+            from reportlab.lib.pagesizes import letter
+            from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+            from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+            from reportlab.lib import colors
+            import io
+            
+            # Create in-memory PDF
+            buffer = io.BytesIO()
+            
+            # Set up PDF document
+            doc = SimpleDocTemplate(buffer, pagesize=letter)
+            styles = getSampleStyleSheet()
+            
+            # Create custom styles
+            title_style = ParagraphStyle(
+                'TitleStyle',
+                parent=styles['Heading1'],
+                fontSize=14,
+                spaceAfter=12
+            )
+            
+            subtitle_style = ParagraphStyle(
+                'SubtitleStyle',
+                parent=styles['Heading2'],
+                fontSize=12,
+                spaceAfter=6
+            )
+            
+            normal_style = styles["Normal"]
+            
+            # Build PDF content
+            content = []
+            
+            # Add title
+            content.append(Paragraph(note_export.title, title_style))
+            content.append(Spacer(1, 12))
+            
+            # Add metadata
+            metadata = [
+                f"Created: {note_export.created_at.strftime('%Y-%m-%d %H:%M:%S')}",
+                f"Updated: {note_export.updated_at.strftime('%Y-%m-%d %H:%M:%S')}"
+            ]
+            
+            if note_export.tags:
+                metadata.append(f"Tags: {note_export.tags}")
+                
+            for line in metadata:
+                content.append(Paragraph(line, normal_style))
+            
+            content.append(Spacer(1, 12))
+            
+            # Add summary if available
+            if note_export.ai_summary:
+                content.append(Paragraph("Summary", subtitle_style))
+                content.append(Paragraph(note_export.ai_summary, normal_style))
+                content.append(Spacer(1, 12))
+            
+            # Add main content
+            content.append(Paragraph("Content", subtitle_style))
+            
+            # Split content by paragraphs for better formatting
+            paragraphs = note_export.content.split('\n')
+            for p in paragraphs:
+                if p.strip():  # Skip empty lines
+                    content.append(Paragraph(p, normal_style))
+            
+            content.append(Spacer(1, 12))
+            
+            # Add action items if available
+            if note_export.extracted_action_items:
+                content.append(Paragraph("Action Items", subtitle_style))
+                
+                # Split action items by lines
+                items = note_export.extracted_action_items.split('\n')
+                for item in items:
+                    if item.strip():
+                        content.append(Paragraph(item, normal_style))
+            
+            # Build and return the PDF
+            doc.build(content)
+            pdf_bytes = buffer.getvalue()
+            buffer.close()
+            
+            return pdf_bytes
+            
+        except ImportError:
+            # If ReportLab is not installed
+            logger.error("ReportLab library not available for PDF generation")
+            raise ImportError("ReportLab is required for PDF generation")
 
     async def process_existing_audio(
         self, user_id: int, note_id: int

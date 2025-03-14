@@ -7,6 +7,7 @@ from sqlalchemy import and_
 
 from app.models import Subscription, User, Invoice, PaymentMethod, PromotionalCode
 from app.repositories.subscription_repository import SubscriptionRepository
+from app.repositories.user_repository import UserRepository
 from app.schemas.subscription import SubscriptionCreate, SubscriptionUpdate
 from app.integrations.payment import get_stripe_client
 from app.core.config import settings
@@ -108,7 +109,7 @@ class SubscriptionService:
         user_id: int,
         user_email: str,
         user_name: str,
-        billing_cycle: str = BillingCycle.MONTHLY,
+        billing_cycle: BillingCycle = BillingCycle.MONTHLY,
         trial: bool = False,
         promotional_code: str = None,
         payment_method_id: str = None,
@@ -136,12 +137,12 @@ class SubscriptionService:
         # Create Stripe subscription with trial if requested
         trial_days = 7 if trial else 0
         subscription = await self.stripe_client.create_subscription(
-            customer["id"], billing_cycle, trial_days, promotional_code
+            customer["id"], billing_cycle.value, trial_days, promotional_code
         )
 
         # Create local subscription record
         subscription_data = SubscriptionCreate(
-            billing_cycle=billing_cycle,
+            billing_cycle=billing_cycle.value,
             promotional_code=promotional_code,
             stripe_subscription_id=subscription["id"],
             stripe_customer_id=customer["id"],
@@ -207,7 +208,7 @@ class SubscriptionService:
         return self.repository.get_subscription_status(user_id)
 
     async def change_billing_cycle(
-        self, user_id: int, new_cycle: str
+        self, user_id: int, new_cycle: BillingCycle
     ) -> Dict[str, Any]:
         """Change a user's billing cycle between monthly and annual"""
         subscription = self.repository.get_by_user_id(user_id)
@@ -215,14 +216,14 @@ class SubscriptionService:
         if not subscription:
             raise HTTPException(status_code=404, detail="Subscription not found")
 
-        if subscription.billing_cycle == new_cycle:
+        if subscription.billing_cycle == new_cycle.value:
             return self.repository.get_subscription_status(user_id)
 
         # This would typically be handled by Stripe's Billing portal
         # or by creating a new subscription with the new cycle
         # For simplicity, we'll just update our local record
         update_data = SubscriptionUpdate(
-            billing_cycle=new_cycle,
+            billing_cycle=new_cycle.value,
         )
 
         self.repository.update_subscription(subscription, update_data)

@@ -1,4 +1,5 @@
 # app/core/constants.py
+import enum
 
 
 # Subscription Status Constants
@@ -15,7 +16,7 @@ class SubscriptionStatus:
 
 
 # Billing Cycle Constants
-class BillingCycle:
+class BillingCycle(str, enum.Enum):
     MONTHLY = "monthly"
     ANNUAL = "annual"
 

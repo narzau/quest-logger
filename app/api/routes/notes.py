@@ -2,12 +2,15 @@ from typing import Dict, Any, List, Optional
 import logging
 
 from fastapi import APIRouter, Depends, UploadFile, File, Form, BackgroundTasks, Query
+from fastapi.responses import Response
 
 from app.api.deps import get_current_user, get_db, get_note_service
 from app.models import User
+from app.models.note import NoteStyle, NoteExportFormat
 from app.services.note_service import NoteService
 from app.schemas.note import NoteCreate, NoteUpdate, Note, VoiceNoteCreate, NoteList
 from app.core.logging import log_context
+from app.core.exceptions import ValidationException
 
 # Set up logger
 logger = logging.getLogger(__name__)
@@ -155,26 +158,24 @@ async def create_voice_note(
     current_user: User = Depends(get_current_user),
 ):
     """Create a new voice note with audio upload and transcription"""
-    # Validate note_style
-    if note_style not in [
-        "standard",
-        "bullet_points",
-        "summary",
-        "action_items",
-        "custom",
-    ]:
-        note_style = "standard"
+    # Validate note_style using the enum
+    try:
+        note_style_enum = NoteStyle(note_style)
+    except ValueError:
+        # If invalid style provided, use the default
+        note_style_enum = NoteStyle.STANDARD
+        logger.warning(f"Invalid note style '{note_style}', using default 'standard' instead")
 
     # Create voice note data
     voice_note_data = VoiceNoteCreate(
-        title=title, folder=folder, note_style=note_style, tags=tags, quest_id=quest_id
+        title=title, folder=folder, note_style=note_style_enum, tags=tags, quest_id=quest_id
     )
 
     with log_context(
         user_id=current_user.id,
         action="create_voice_note",
         filename=file.filename,
-        note_style=note_style,
+        note_style=note_style_enum,
     ):
         logger.info(f"Processing voice note: {title}, file: {file.filename}")
         return await note_service.process_audio_upload(
@@ -197,13 +198,32 @@ async def process_note_audio(
 @router.get("/{note_id}/export")
 async def export_note(
     note_id: int,
-    format: str = Query("text", regex="^(text|markdown|pdf)$"),
+    format: str = Query("text"),
     note_service: NoteService = Depends(get_note_service()),
     current_user: User = Depends(get_current_user),
 ):
     """Export a note in the specified format (text, markdown, pdf)"""
+    # Validate format using the enum
+    try:
+        format_enum = NoteExportFormat(format)
+    except ValueError:
+        # If invalid format provided, use the default
+        format_enum = NoteExportFormat.TEXT
+        logger.warning(f"Invalid export format '{format}', using default 'text' instead")
+    
     with log_context(
-        user_id=current_user.id, note_id=note_id, format=format, action="export_note"
+        user_id=current_user.id, note_id=note_id, format=format_enum, action="export_note"
     ):
-        logger.info(f"Exporting note {note_id} in {format} format")
-        return await note_service.export_note(current_user.id, note_id, format)
+        logger.info(f"Exporting note {note_id} in {format_enum} format")
+        
+        # Get the exported note content and metadata
+        result = await note_service.export_note(current_user.id, note_id, format_enum)
+        
+        # Return the file as a downloadable response
+        return Response(
+            content=result["content"],
+            media_type=result["content_type"],
+            headers={
+                "Content-Disposition": f'attachment; filename="{result["filename"]}"',
+            },
+        )
