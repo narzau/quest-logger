@@ -1,0 +1,394 @@
+{
+  "info": {
+    "name": "QuestLogger Notes API",
+    "description": "API endpoints for managing notes in Quest Logger",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_uid": "7985822-eae33d05-d0df-4adf-876b-0adec7b9bb21"
+  },
+  "item": [
+    {
+      "name": "Create Note",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{access_token}}",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"title\": \"Sample Note\",\n  \"content\": \"This is a test note content.\",\n  \"tags\": \"test,sample\",\n  \"folder\": \"TestFolder\",\n  \"note_style\": \"standard\",\n  \"quest_id\": null,\n  \"ai_process\": true\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/v1/notes/",
+          "host": ["{{base_url}}"],
+          "path": ["api", "v1", "notes", ""]
+        },
+        "description": "Create a new text note"
+      },
+      "response": []
+    },
+    {
+      "name": "Get Note by ID",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{access_token}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/v1/notes/{{note_id}}",
+          "host": ["{{base_url}}"],
+          "path": ["api", "v1", "notes", "{{note_id}}"]
+        },
+        "description": "Get a note by its ID"
+      },
+      "response": []
+    },
+    {
+      "name": "Get Shared Note",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/api/v1/notes/shared/{{share_id}}",
+          "host": ["{{base_url}}"],
+          "path": ["api", "v1", "notes", "shared", "{{share_id}}"]
+        },
+        "description": "Get a note by its public share ID (no auth required)"
+      },
+      "response": []
+    },
+    {
+      "name": "List Notes",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{access_token}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/v1/notes/?skip=0&limit=10&sort_by=updated_at&sort_order=desc",
+          "host": ["{{base_url}}"],
+          "path": ["api", "v1", "notes", ""],
+          "query": [
+            {
+              "key": "skip",
+              "value": "0"
+            },
+            {
+              "key": "limit",
+              "value": "10"
+            },
+            {
+              "key": "folder",
+              "value": "MyFolder",
+              "disabled": true
+            },
+            {
+              "key": "tag",
+              "value": "important",
+              "disabled": true
+            },
+            {
+              "key": "search",
+              "value": "keyword",
+              "disabled": true
+            },
+            {
+              "key": "sort_by",
+              "value": "updated_at"
+            },
+            {
+              "key": "sort_order",
+              "value": "desc"
+            }
+          ]
+        },
+        "description": "Get a list of notes with pagination and filtering"
+      },
+      "response": []
+    },
+    {
+      "name": "Update Note",
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{access_token}}",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"title\": \"Updated Note Title\",\n  \"content\": \"Updated content for the note.\",\n  \"tags\": \"updated,test\",\n  \"folder\": \"UpdatedFolder\",\n  \"is_public\": false\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/v1/notes/{{note_id}}",
+          "host": ["{{base_url}}"],
+          "path": ["api", "v1", "notes", "{{note_id}}"]
+        },
+        "description": "Update an existing note"
+      },
+      "response": []
+    },
+    {
+      "name": "Delete Note",
+      "request": {
+        "method": "DELETE",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{access_token}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/v1/notes/{{note_id}}",
+          "host": ["{{base_url}}"],
+          "path": ["api", "v1", "notes", "{{note_id}}"]
+        },
+        "description": "Delete a note"
+      },
+      "response": []
+    },
+    {
+      "name": "List Folders",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{access_token}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/v1/notes/folders/list",
+          "host": ["{{base_url}}"],
+          "path": ["api", "v1", "notes", "folders", "list"]
+        },
+        "description": "Get a list of unique folders used by the user"
+      },
+      "response": []
+    },
+    {
+      "name": "List Tags",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{access_token}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/v1/notes/tags/list",
+          "host": ["{{base_url}}"],
+          "path": ["api", "v1", "notes", "tags", "list"]
+        },
+        "description": "Get a list of unique tags used by the user"
+      },
+      "response": []
+    },
+    {
+      "name": "Share Note",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{access_token}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/v1/notes/{{note_id}}/share",
+          "host": ["{{base_url}}"],
+          "path": ["api", "v1", "notes", "{{note_id}}", "share"]
+        },
+        "description": "Generate a public shareable link for a note"
+      },
+      "response": []
+    },
+    {
+      "name": "Unshare Note",
+      "request": {
+        "method": "DELETE",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{access_token}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/v1/notes/{{note_id}}/share",
+          "host": ["{{base_url}}"],
+          "path": ["api", "v1", "notes", "{{note_id}}", "share"]
+        },
+        "description": "Remove public sharing for a note"
+      },
+      "response": []
+    },
+    {
+      "name": "Create Voice Note",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{access_token}}",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "formdata",
+          "formdata": [
+            {
+              "key": "file",
+              "type": "file",
+              "src": "/path/to/audio.mp3"
+            },
+            {
+              "key": "title",
+              "value": "Voice Note Title",
+              "type": "text"
+            },
+            {
+              "key": "folder",
+              "value": "VoiceNotes",
+              "type": "text"
+            },
+            {
+              "key": "note_style",
+              "value": "standard",
+              "type": "text",
+              "description": "Options: standard, bullet_points, summary, action_items, custom"
+            },
+            {
+              "key": "tags",
+              "value": "voice,audio",
+              "type": "text"
+            },
+            {
+              "key": "quest_id",
+              "value": "",
+              "type": "text"
+            }
+          ]
+        },
+        "url": {
+          "raw": "{{base_url}}/api/v1/notes/voice",
+          "host": ["{{base_url}}"],
+          "path": ["api", "v1", "notes", "voice"]
+        },
+        "description": "Create a new voice note with audio upload and transcription"
+      },
+      "response": []
+    },
+    {
+      "name": "Process Note Audio",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{access_token}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/v1/notes/{{note_id}}/process",
+          "host": ["{{base_url}}"],
+          "path": ["api", "v1", "notes", "{{note_id}}", "process"]
+        },
+        "description": "Process an existing audio note with AI features"
+      },
+      "response": []
+    },
+    {
+      "name": "Export Note",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{access_token}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/v1/notes/{{note_id}}/export?format=markdown",
+          "host": ["{{base_url}}"],
+          "path": ["api", "v1", "notes", "{{note_id}}", "export"],
+          "query": [
+            {
+              "key": "format",
+              "value": "markdown",
+              "description": "Options: text, markdown, pdf"
+            }
+          ]
+        },
+        "description": "Export a note in the specified format (text, markdown, pdf)"
+      },
+      "response": []
+    }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [""]
+      }
+    },
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "exec": [""]
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:8000",
+      "type": "string"
+    },
+    {
+      "key": "access_token",
+      "value": "your_jwt_token_here",
+      "type": "string"
+    },
+    {
+      "key": "note_id",
+      "value": "1",
+      "type": "string"
+    },
+    {
+      "key": "share_id",
+      "value": "abc123",
+      "type": "string"
+    }
+  ]
+}

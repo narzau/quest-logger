@@ -1,0 +1,284 @@
+{
+  "info": {
+    "name": "QuestLogger Subscription API",
+    "description": "API endpoints for managing subscriptions in Quest Logger",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_uid": "7985822-f3e33d05-d0df-4adf-876b-0adec7b9bb22"
+  },
+  "item": [
+    {
+      "name": "Get Subscription Status",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{access_token}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/v1/subscription/status",
+          "host": ["{{base_url}}"],
+          "path": ["api", "v1", "subscription", "status"]
+        },
+        "description": "Get the current user's subscription status"
+      },
+      "response": []
+    },
+    {
+      "name": "Get Pricing",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{access_token}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/v1/subscription/pricing",
+          "host": ["{{base_url}}"],
+          "path": ["api", "v1", "subscription", "pricing"]
+        },
+        "description": "Get subscription pricing information"
+      },
+      "response": []
+    },
+    {
+      "name": "Subscribe",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{access_token}}",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"billing_cycle\": \"monthly\",\n  \"trial\": false,\n  \"promotional_code\": null,\n  \"payment_method_id\": \"pm_123456789\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/v1/subscription/subscribe",
+          "host": ["{{base_url}}"],
+          "path": ["api", "v1", "subscription", "subscribe"]
+        },
+        "description": "Subscribe to the paid tier"
+      },
+      "response": []
+    },
+    {
+      "name": "Unsubscribe",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{access_token}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/v1/subscription/unsubscribe",
+          "host": ["{{base_url}}"],
+          "path": ["api", "v1", "subscription", "unsubscribe"]
+        },
+        "description": "Cancel the current subscription"
+      },
+      "response": []
+    },
+    {
+      "name": "Update Payment Method",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{access_token}}",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"payment_method_id\": \"pm_123456789\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/v1/subscription/payment-method",
+          "host": ["{{base_url}}"],
+          "path": ["api", "v1", "subscription", "payment-method"]
+        },
+        "description": "Update payment method"
+      },
+      "response": []
+    },
+    {
+      "name": "Get Payment History",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{access_token}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/v1/subscription/payment-history?limit=10",
+          "host": ["{{base_url}}"],
+          "path": ["api", "v1", "subscription", "payment-history"],
+          "query": [
+            {
+              "key": "limit",
+              "value": "10"
+            }
+          ]
+        },
+        "description": "Get payment history"
+      },
+      "response": []
+    },
+    {
+      "name": "Change Billing Cycle",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{access_token}}",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"new_cycle\": \"annual\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/v1/subscription/billing-cycle",
+          "host": ["{{base_url}}"],
+          "path": ["api", "v1", "subscription", "billing-cycle"]
+        },
+        "description": "Change billing cycle (monthly/annual)"
+      },
+      "response": []
+    },
+    {
+      "name": "Apply Promo Code",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{access_token}}",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"code\": \"PROMO25\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/v1/subscription/apply-promo",
+          "host": ["{{base_url}}"],
+          "path": ["api", "v1", "subscription", "apply-promo"]
+        },
+        "description": "Apply a promotional code to subscription"
+      },
+      "response": []
+    },
+    {
+      "name": "Create Checkout Session",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{access_token}}",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"billing_cycle\": \"monthly\",\n  \"promotional_code\": null\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/v1/subscription/create-checkout",
+          "host": ["{{base_url}}"],
+          "path": ["api", "v1", "subscription", "create-checkout"]
+        },
+        "description": "Create a Stripe Checkout session for subscription payment"
+      },
+      "response": []
+    },
+    {
+      "name": "Get Trial Notification",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{access_token}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/v1/subscription/trial-notification",
+          "host": ["{{base_url}}"],
+          "path": ["api", "v1", "subscription", "trial-notification"]
+        },
+        "description": "Get notification information about the user's trial status"
+      },
+      "response": []
+    }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [""]
+      }
+    },
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "exec": [""]
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:8000",
+      "type": "string"
+    },
+    {
+      "key": "access_token",
+      "value": "your_jwt_token_here",
+      "type": "string"
+    }
+  ]
+}

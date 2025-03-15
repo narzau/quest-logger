@@ -20,7 +20,6 @@ var/
 .installed.cfg
 *.egg
 .cursor
-postman/
 # Google
 client_secret*
 
@@ -83,7 +82,6 @@ temp/
 tmp/
 
 # Docker
-.dockerignore
 docker-compose.override.yml
 
 # Data directories

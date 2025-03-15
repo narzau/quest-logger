@@ -1,0 +1,33 @@
+{
+  "id": "9c5ec3c0-9eab-4c6e-8b1c-8d6f2b3b5cd1",
+  "name": "QuestLogger Local",
+  "values": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:8000",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "access_token",
+      "value": "",
+      "type": "secret",
+      "enabled": true
+    },
+    {
+      "key": "note_id",
+      "value": "",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "share_id",
+      "value": "",
+      "type": "default",
+      "enabled": true
+    }
+  ],
+  "_postman_variable_scope": "environment",
+  "_postman_exported_at": "2023-06-23T10:00:00.000Z",
+  "_postman_exported_using": "Postman/10.0.0"
+}
