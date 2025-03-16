@@ -49,14 +49,7 @@ class TestNotesAPI:
                 "title": "Test Voice Note",
                 "status": "processing"
             }
-            
-            mock_service.process_existing_audio = AsyncMock()
-            mock_service.process_existing_audio.return_value = {
-                "id": 1,
-                "title": "Processed Voice Note",
-                "status": "completed"
-            }
-            
+      
             mock_service.export_note = AsyncMock()
             mock_service.export_note.return_value = {
                 "id": 1,
@@ -445,21 +438,7 @@ class TestNotesAPI:
         assert args[0] == 1  # user_id
         assert kwargs.get('note_data').note_style == NoteStyle.BLOG_POST
     
-    def test_process_note_audio(self, authorized_client, mock_note_service, mock_auth):
-        """Test the POST /notes/{note_id}/process endpoint"""
-        # Make the request
-        response = authorized_client.post("/api/v1/notes/1/process")
-        
-        # Check the response
-        assert response.status_code == 200
-        data = response.json()
-        assert data["id"] == 1
-        assert data["title"] == "Processed Voice Note"
-        assert data["status"] == "completed"
-        
-        # Verify service was called correctly
-        mock_note_service.process_existing_audio.assert_awaited_once_with(1, 1)
-    
+  
     def test_export_note(self, authorized_client, mock_note_service, mock_auth):
         """Test the GET /notes/{note_id}/export endpoint"""
         # Make the request

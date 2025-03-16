@@ -1,5 +1,6 @@
 from typing import Optional, Dict, Any, List
 from datetime import datetime, timedelta
+from sqlalchemy import and_
 
 from sqlalchemy.orm import Session
 
@@ -71,6 +72,23 @@ class SubscriptionRepository(BaseRepository[Subscription]):
 
         if subscription:
             subscription.total_minutes_used_this_month += minutes_used
+            subscription.updated_at = datetime.utcnow()
+
+            self.db.add(subscription)
+            self.db.commit()
+            self.db.refresh(subscription)
+
+        return subscription
+
+    def refund_usage(self, user_id: int, minutes_to_refund: float) -> Optional[Subscription]:
+        """Refund voice note minutes when processing fails"""
+        subscription = self.get_by_user_id(user_id)
+
+        if subscription:
+            # Ensure we don't go below zero
+            subscription.total_minutes_used_this_month = max(
+                0, subscription.total_minutes_used_this_month - minutes_to_refund
+            )
             subscription.updated_at = datetime.utcnow()
 
             self.db.add(subscription)
@@ -325,3 +343,43 @@ class SubscriptionRepository(BaseRepository[Subscription]):
             .filter(Subscription.stripe_customer_id == stripe_customer_id)
             .first()
         )
+
+    def get_expired_trials(self) -> List[Subscription]:
+        """Get all expired trial subscriptions"""
+        now = datetime.utcnow()
+        return (
+            self.db.query(Subscription)
+            .filter(
+                and_(
+                    Subscription.status == SubscriptionStatus.TRIALING,
+                    Subscription.trial_end < now,
+                )
+            )
+            .all()
+        )
+
+    def get_expired_active_subscriptions(self) -> List[Subscription]:
+        """Get all expired active subscriptions"""
+        now = datetime.utcnow()
+        return (
+            self.db.query(Subscription)
+            .filter(
+                and_(
+                    Subscription.status == SubscriptionStatus.ACTIVE,
+                    Subscription.current_period_end < now,
+                )
+            )
+            .all()
+        )
+
+    def get_user_by_id(self, user_id: int) -> Optional[User]:
+        """Get user by ID"""
+        return self.db.query(User).filter(User.id == user_id).first()
+
+    def increment_promo_code_usage(self, promo_code: PromotionalCode) -> PromotionalCode:
+        """Increment the usage count of a promotional code"""
+        promo_code.times_redeemed += 1
+        self.db.add(promo_code)
+        self.db.commit()
+        self.db.refresh(promo_code)
+        return promo_code

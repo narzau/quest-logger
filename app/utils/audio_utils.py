@@ -9,12 +9,12 @@ from pydub import AudioSegment
 logger = logging.getLogger(__name__)
 
 
-async def get_audio_info(file: UploadFile) -> Dict[str, Any]:
+async def get_audio_info(audio_file: UploadFile) -> Dict[str, Any]:
     """
     Extract information from an audio file, including duration.
 
     Args:
-        file: The uploaded audio file
+        audio_file: The uploaded audio file
 
     Returns:
         A dictionary containing audio information such as:
@@ -27,14 +27,14 @@ async def get_audio_info(file: UploadFile) -> Dict[str, Any]:
     temp_file_path = None
     try:
         # Save the audio to a temporary file
-        suffix = os.path.splitext(file.filename)[1] if file.filename else ""
+        suffix = os.path.splitext(audio_file.filename)[1] if audio_file.filename else ""
         with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as temp:
-            content = await file.read()
+            content = await audio_file.read()
             temp.write(content)
             temp_file_path = temp.name
 
         # Reset file pointer for future use
-        await file.seek(0)
+        await audio_file.seek(0)
 
         # Load with pydub to extract information
         audio = AudioSegment.from_file(temp_file_path)

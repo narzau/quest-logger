@@ -39,19 +39,20 @@ class NoteRepository(BaseRepository[Note]):
         self,
         owner_id: int,
         obj_in: VoiceNoteCreate,
-        audio_duration: float,
-        language: str,
+        audio_duration_minutes: float,
+        language: str = "en",
     ) -> Note:
         """Create a voice note with audio information but without storing the audio file"""
         note = Note(
             owner_id=owner_id,
             title=obj_in.title,
-            audio_duration=audio_duration,
+            audio_duration=audio_duration_minutes * 60,  # Convert to seconds for consistency
             language=language,
             folder=obj_in.folder,
             note_style=obj_in.note_style,
             tags=obj_in.tags,
             quest_id=obj_in.quest_id,
+            processing_status="pending",  # Set initial processing status
         )
         self.db.add(note)
         self.db.commit()
@@ -84,6 +85,7 @@ class NoteRepository(BaseRepository[Note]):
             tags=obj_in.tags,
             quest_id=obj_in.quest_id,
             ai_processed=True,  # Mark as AI processed since we've done all the processing
+            processing_status="completed",  # Set processing status to completed
         )
         self.db.add(note)
         self.db.commit()
@@ -220,6 +222,7 @@ class NoteRepository(BaseRepository[Note]):
             note.extracted_action_items = extracted_action_items
 
         note.updated_at = datetime.utcnow()
+        note.processing_status = "completed"  # Update processing status to completed
 
         self.db.add(note)
         self.db.commit()

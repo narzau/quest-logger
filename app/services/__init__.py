@@ -13,7 +13,9 @@ from app.services.note_service import NoteService
 from app.services.quest_service import QuestService
 from app.services.subscription_service import SubscriptionService
 from app.services.user_service import UserService
-
+from app.services.achievement_service import AchievementService
+from app.services.google_calendar_service import GoogleCalendarService
+from app.services.progression_service import ProgressionService
 
 def register_services():
     """Register all services with the dependency injection system."""
@@ -25,3 +27,6 @@ def register_services():
     register_service(QuestService, lambda db: QuestService(db))
     register_service(SubscriptionService, lambda db: SubscriptionService(db))
     register_service(UserService, lambda db: UserService(db))
+    register_service(AchievementService, lambda db: AchievementService(db))
+    register_service(GoogleCalendarService, lambda db: GoogleCalendarService(db))
+    register_service(ProgressionService, lambda db: ProgressionService(db))

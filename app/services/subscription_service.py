@@ -1,22 +1,25 @@
+import asyncio
 from typing import Optional, Dict, Any, List
-from datetime import datetime, timedelta
+from datetime import datetime
 
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
-from sqlalchemy import and_
 
-from app.models import Subscription, User, Invoice, PaymentMethod, PromotionalCode
 from app.repositories.subscription_repository import SubscriptionRepository
-from app.repositories.user_repository import UserRepository
-from app.schemas.subscription import SubscriptionCreate, SubscriptionUpdate
-from app.integrations.payment import get_stripe_client
-from app.core.config import settings
-from app.core.constants import (
+from app.schemas.subscription import (
+    SubscriptionCreate, 
+    SubscriptionUpdate, 
     SubscriptionStatus,
+    PricingInfo,
+    PaymentMethodResponse,
+    CheckoutSessionResponse,
+    WebhookResponse
+)
+from app.integrations.payment import get_stripe_client
+from app.core.constants import (
+    SubscriptionStatus as SubscriptionStatusEnum,
     BillingCycle,
     WebhookEventType,
-    PaymentStatus,
-    FeatureFlag,
 )
 
 
@@ -28,29 +31,16 @@ class SubscriptionService:
         self.repository = SubscriptionRepository(db)
         self.stripe_client = get_stripe_client()
 
-    async def get_subscription_status(self, user_id: int) -> Dict[str, Any]:
+    async def get_subscription_status(self, user_id: int) -> SubscriptionStatus:
         """Get user's subscription status"""
-        # Check if subscription exists
+        await asyncio.gather(
+            self.check_and_update_expired_trials(),
+            self.check_and_update_expired_subscriptions()
+        )
+        
         subscription_status = self.repository.get_subscription_status(user_id)
 
-        # If a subscription exists and is in trial mode, check if it's expired
-        if (
-            subscription_status.get("status") == SubscriptionStatus.TRIALING
-            and subscription_status.get("trial_end")
-            and subscription_status.get("trial_end") < datetime.utcnow()
-        ):
-            # Trial has expired - update status
-            subscription = self.repository.get_by_user_id(user_id)
-            if subscription:
-                update_data = SubscriptionUpdate(
-                    status=SubscriptionStatus.TRIAL_EXPIRED
-                )
-                self.repository.update_subscription(subscription, update_data)
-
-                # Re-fetch status with updated information
-                subscription_status = self.repository.get_subscription_status(user_id)
-
-        return subscription_status
+        return SubscriptionStatus(**subscription_status)
 
     async def check_and_update_expired_trials(self) -> int:
         """
@@ -58,29 +48,35 @@ class SubscriptionService:
         Returns the number of updated subscriptions.
         This would typically be called by a scheduled job.
         """
-        now = datetime.utcnow()
-        expired_trials = (
-            self.db.query(Subscription)
-            .filter(
-                and_(
-                    Subscription.status == SubscriptionStatus.TRIALING,
-                    Subscription.trial_end < now,
-                )
-            )
-            .all()
-        )
+        expired_trials = self.repository.get_expired_trials()
 
         updated_count = 0
         for subscription in expired_trials:
-            update_data = SubscriptionUpdate(status=SubscriptionStatus.TRIAL_EXPIRED)
+            update_data = SubscriptionUpdate(status=SubscriptionStatusEnum.TRIAL_EXPIRED)
             self.repository.update_subscription(subscription, update_data)
             updated_count += 1
 
         return updated_count
 
-    async def get_pricing(self) -> Dict[str, Any]:
+    async def check_and_update_expired_subscriptions(self) -> int:
+        """
+        Check for all expired active subscriptions and update their status to past_due.
+        Returns the number of updated subscriptions.
+        This would typically be called by a scheduled job.
+        """
+        expired_subscriptions = self.repository.get_expired_active_subscriptions()
+
+        updated_count = 0
+        for subscription in expired_subscriptions:
+            update_data = SubscriptionUpdate(status=SubscriptionStatusEnum.PAST_DUE)
+            self.repository.update_subscription(subscription, update_data)
+            updated_count += 1
+
+        return updated_count
+
+    async def get_pricing(self) -> PricingInfo:
         """Get subscription pricing information"""
-        return {
+        pricing_data = {
             "price": {
                 "display_name": "Quest Logger Pro",
                 "description": "Full featured with ample recording time",
@@ -103,6 +99,7 @@ class SubscriptionService:
                 }
             ],
         }
+        return PricingInfo(**pricing_data)
 
     async def start_subscription(
         self,
@@ -113,17 +110,18 @@ class SubscriptionService:
         trial: bool = False,
         promotional_code: str = None,
         payment_method_id: str = None,
-    ) -> Dict[str, Any]:
+    ) -> SubscriptionStatus:
         """Start a new subscription for a user"""
         # Check if user already has a subscription
         existing_subscription = self.repository.get_by_user_id(user_id)
 
         if (
             existing_subscription
-            and existing_subscription.status == SubscriptionStatus.ACTIVE
+            and existing_subscription.status == SubscriptionStatusEnum.ACTIVE
         ):
             # User already has an active subscription
-            return self.repository.get_subscription_status(user_id)
+            subscription_status = self.repository.get_subscription_status(user_id)
+            return SubscriptionStatus(**subscription_status)
 
         # Create Stripe customer
         customer = await self.stripe_client.create_customer(user_email, user_name)
@@ -185,9 +183,10 @@ class SubscriptionService:
                 True,
             )
 
-        return self.repository.get_subscription_status(user_id)
+        subscription_status = self.repository.get_subscription_status(user_id)
+        return SubscriptionStatus(**subscription_status)
 
-    async def cancel_subscription(self, user_id: int) -> Dict[str, Any]:
+    async def cancel_subscription(self, user_id: int) -> SubscriptionStatus:
         """Cancel a user's subscription"""
         subscription = self.repository.get_by_user_id(user_id)
 
@@ -201,15 +200,16 @@ class SubscriptionService:
             )
 
             # Update local subscription status
-            update_data = SubscriptionUpdate(status=SubscriptionStatus.CANCELED)
+            update_data = SubscriptionUpdate(status=SubscriptionStatusEnum.CANCELED)
 
             self.repository.update_subscription(subscription, update_data)
 
-        return self.repository.get_subscription_status(user_id)
+        subscription_status = self.repository.get_subscription_status(user_id)
+        return SubscriptionStatus(**subscription_status)
 
     async def change_billing_cycle(
         self, user_id: int, new_cycle: BillingCycle
-    ) -> Dict[str, Any]:
+    ) -> SubscriptionStatus:
         """Change a user's billing cycle between monthly and annual"""
         subscription = self.repository.get_by_user_id(user_id)
 
@@ -217,7 +217,8 @@ class SubscriptionService:
             raise HTTPException(status_code=404, detail="Subscription not found")
 
         if subscription.billing_cycle == new_cycle.value:
-            return self.repository.get_subscription_status(user_id)
+            subscription_status = self.repository.get_subscription_status(user_id)
+            return SubscriptionStatus(**subscription_status)
 
         # This would typically be handled by Stripe's Billing portal
         # or by creating a new subscription with the new cycle
@@ -228,9 +229,10 @@ class SubscriptionService:
 
         self.repository.update_subscription(subscription, update_data)
 
-        return self.repository.get_subscription_status(user_id)
+        subscription_status = self.repository.get_subscription_status(user_id)
+        return SubscriptionStatus(**subscription_status)
 
-    async def apply_promotional_code(self, user_id: int, code: str) -> Dict[str, Any]:
+    async def apply_promotional_code(self, user_id: int, code: str) -> SubscriptionStatus:
         """Apply a promotional code to a user's subscription"""
         subscription = self.repository.get_by_user_id(user_id)
 
@@ -259,21 +261,19 @@ class SubscriptionService:
 
         # Apply to subscription
         update_data = SubscriptionUpdate(promotional_code=code)
-
         self.repository.update_subscription(subscription, update_data)
 
-        # Update promo usage count
-        promo.times_redeemed += 1
-        self.db.add(promo)
-        self.db.commit()
+        # Update promo usage count using the repository method
+        self.repository.increment_promo_code_usage(promo)
 
         # In a real implementation, this would use Stripe's API
 
-        return self.repository.get_subscription_status(user_id)
+        subscription_status = self.repository.get_subscription_status(user_id)
+        return SubscriptionStatus(**subscription_status)
 
     async def update_payment_method(
         self, user_id: int, payment_method_id: str
-    ) -> Dict[str, Any]:
+    ) -> PaymentMethodResponse:
         """Update a user's payment method"""
         subscription = self.repository.get_by_user_id(user_id)
 
@@ -301,7 +301,7 @@ class SubscriptionService:
             True,  # Make it the default
         )
 
-        return {
+        payment_method_data = {
             "id": payment_method.id,
             "brand": payment_method.brand,
             "last4": payment_method.last4,
@@ -309,6 +309,7 @@ class SubscriptionService:
             "exp_year": payment_method.exp_year,
             "is_default": payment_method.is_default,
         }
+        return PaymentMethodResponse(**payment_method_data)
 
     async def get_payment_history(
         self, user_id: int, limit: int = 10
@@ -353,12 +354,12 @@ class SubscriptionService:
         success_url: str,
         cancel_url: str,
         promotional_code: Optional[str] = None,
-    ) -> Dict[str, Any]:
+    ) -> CheckoutSessionResponse:
         """Create a checkout session for a user"""
         subscription = self.repository.get_by_user_id(user_id)
 
         # If user already has a subscription, don't create a new checkout
-        if subscription and subscription.status == SubscriptionStatus.ACTIVE:
+        if subscription and subscription.status == SubscriptionStatusEnum.ACTIVE:
             raise HTTPException(
                 status_code=400, detail="User already has an active subscription"
             )
@@ -367,8 +368,8 @@ class SubscriptionService:
         customer_id = subscription.stripe_customer_id if subscription else None
 
         if not customer_id:
-            # Get user details
-            user = self.db.query(User).filter(User.id == user_id).first()
+            # Get user details using the repository method
+            user = self.repository.get_user_by_id(user_id)
             if not user:
                 raise HTTPException(status_code=404, detail="User not found")
 
@@ -388,12 +389,29 @@ class SubscriptionService:
             customer_id, success_url, cancel_url, promotional_code
         )
 
-        return {
-            "session_id": checkout_session["id"],
-            "checkout_url": checkout_session["url"],
-        }
+        return CheckoutSessionResponse(
+            session_id=checkout_session["id"],
+            checkout_url=checkout_session["url"],
+        )
 
-    async def handle_webhook(self, payload: str, signature: str) -> Dict[str, Any]:
+
+    async def track_usage(self, user_id: int, audio_duration_minutes: float) -> None:
+        """Track usage for a user"""
+        subscription = self.repository.get_by_user_id(user_id)
+        if not subscription:
+            raise HTTPException(status_code=404, detail="Subscription not found")
+
+        self.repository.track_usage(user_id, audio_duration_minutes)
+
+    async def refund_usage(self, user_id: int, audio_duration_minutes: float) -> None:
+        """Refund usage for a user"""
+        subscription = self.repository.get_by_user_id(user_id)
+        if not subscription:
+            raise HTTPException(status_code=404, detail="Subscription not found")
+
+        self.repository.refund_usage(user_id, audio_duration_minutes)
+    
+    async def handle_webhook(self, payload: str, signature: str) -> WebhookResponse:
         """Handle Stripe webhook events"""
         try:
             event = await self.stripe_client.handle_webhook(payload, signature)
@@ -408,7 +426,7 @@ class SubscriptionService:
             elif event["type"] == WebhookEventType.INVOICE_PAID:
                 await self._handle_invoice_paid(event["data"]["object"])
 
-            return {"status": "success", "event_type": event["type"]}
+            return WebhookResponse(status="success", event_type=event["type"])
 
         except Exception as e:
             print(f"Webhook error: {e}")
@@ -497,7 +515,7 @@ class SubscriptionService:
             return
 
         # Update subscription status
-        update_data = SubscriptionUpdate(status=SubscriptionStatus.CANCELED)
+        update_data = SubscriptionUpdate(status=SubscriptionStatusEnum.CANCELED)
 
         self.repository.update_subscription(subscription, update_data)
 

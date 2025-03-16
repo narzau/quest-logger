@@ -1,4 +1,7 @@
 # app/services/quest_service.py
+import asyncio
+import logging
+
 from datetime import datetime
 from typing import List, Optional, Dict, Any
 from sqlalchemy.orm import Session
@@ -14,8 +17,8 @@ from app.services.progression_service import ProgressionService
 from app.services.google_calendar_service import GoogleCalendarService
 from app.integrations.chat_completion import ChatCompletionService
 from app.integrations.speech import get_stt_service
+from app.services.subscription_service import SubscriptionService
 
-import logging
 
 logger = logging.getLogger(__name__)
 
@@ -30,6 +33,7 @@ class QuestService:
         self.progression_service = ProgressionService(db)
         self.calendar_service = GoogleCalendarService(db)
         self.chat_completion_service: ChatCompletionService = ChatCompletionService()
+        self.subscription_service = SubscriptionService(db)
         self.stt_service = get_stt_service()
 
     def get_quests(
@@ -153,9 +157,10 @@ class QuestService:
         user_id: int,
         audio_file: File,
         language: str,
+        audio_duration_minutes: float,
         google_calendar: bool = False,
     ) -> Quest:
-        """Create a new quest."""
+        """Create a new quest from voice recording."""
         transcription_result = await self.stt_service.transcribe(
             audio_file=audio_file,
             language=language,
@@ -170,7 +175,10 @@ class QuestService:
             raise ProcessingException(
                 detail="We couldn't turn your voice into a quest",
             )
-
+        
+        asyncio.create_task(self.subscription_service.track_usage(user_id, audio_duration_minutes))
+          
+           
         exp_reward = self._calculate_quest_exp_reward(
             rarity=quest_in.rarity,
             quest_type=quest_in.quest_type,
@@ -200,6 +208,8 @@ class QuestService:
         self,
         audio_file: File,
         language: str,
+        user_id: int,
+        audio_duration_minutes: float,
     ) -> schemas.QuestCreate:
         """Suggest a new quest from audio feedback"""
         transcription_result = await self.stt_service.transcribe(
@@ -211,6 +221,8 @@ class QuestService:
             quest_in = await self.chat_completion_service.parse_quest_from_text(
                 transcription_result.text, language, "Argentina"
             )
+            asyncio.create_task(self.subscription_service.track_usage(user_id, audio_duration_minutes))
+            
             quest_in.exp_reward = self._calculate_quest_exp_reward(
                 rarity=quest_in.rarity,
                 quest_type=quest_in.quest_type,

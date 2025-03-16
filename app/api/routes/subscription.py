@@ -1,24 +1,21 @@
-from typing import Dict, Any, Optional, List
+from typing import Optional
 from datetime import datetime
-import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Body, Request
-from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user, get_db, get_subscription_service
+from app.api.deps import get_current_user, get_subscription_service
 from app.models import User
 from app.services.subscription_service import SubscriptionService
 from app.core.config import settings
-from app.core.constants import SubscriptionStatus, BillingCycle, FeatureFlag
+from app.core.constants import SubscriptionStatus, BillingCycle
 from app.core.exceptions import ValidationException
-from app.core.logging import log_context
 
 router = APIRouter()
 
 
 @router.get("/status")
 async def get_subscription_status(
-    subscription_service: SubscriptionService = Depends(get_subscription_service),
+    subscription_service: SubscriptionService = Depends(get_subscription_service()),
     current_user: User = Depends(get_current_user),
 ):
     """Get the current user's subscription status"""
@@ -27,7 +24,7 @@ async def get_subscription_status(
 
 @router.get("/pricing")
 async def get_pricing(
-    subscription_service: SubscriptionService = Depends(get_subscription_service),
+    subscription_service: SubscriptionService = Depends(get_subscription_service()),
 ):
     """Get subscription pricing information"""
     return await subscription_service.get_pricing()
@@ -39,7 +36,7 @@ async def subscribe(
     trial: bool = Body(False, embed=True),
     promotional_code: Optional[str] = Body(None, embed=True),
     payment_method_id: Optional[str] = Body(None, embed=True),
-    subscription_service: SubscriptionService = Depends(get_subscription_service),
+    subscription_service: SubscriptionService = Depends(get_subscription_service()),
     current_user: User = Depends(get_current_user),
 ):
     """Subscribe to the paid tier"""
@@ -68,7 +65,7 @@ async def subscribe(
 
 @router.post("/unsubscribe")
 async def unsubscribe(
-    subscription_service: SubscriptionService = Depends(get_subscription_service),
+    subscription_service: SubscriptionService = Depends(get_subscription_service()),
     current_user: User = Depends(get_current_user),
 ):
     """Cancel the current subscription"""
@@ -78,7 +75,7 @@ async def unsubscribe(
 @router.post("/payment-method")
 async def update_payment_method(
     payment_method_id: str = Body(..., embed=True),
-    subscription_service: SubscriptionService = Depends(get_subscription_service),
+    subscription_service: SubscriptionService = Depends(get_subscription_service()),
     current_user: User = Depends(get_current_user),
 ):
     """Update payment method"""
@@ -90,7 +87,7 @@ async def update_payment_method(
 @router.get("/payment-history")
 async def get_payment_history(
     limit: int = 10,
-    subscription_service: SubscriptionService = Depends(get_subscription_service),
+    subscription_service: SubscriptionService = Depends(get_subscription_service()),
     current_user: User = Depends(get_current_user),
 ):
     """Get payment history"""
@@ -100,7 +97,7 @@ async def get_payment_history(
 @router.post("/billing-cycle")
 async def change_billing_cycle(
     new_cycle: str = Body(..., embed=True),
-    subscription_service: SubscriptionService = Depends(get_subscription_service),
+    subscription_service: SubscriptionService = Depends(get_subscription_service()),
     current_user: User = Depends(get_current_user),
 ):
     """Change billing cycle (monthly/annual)"""
@@ -116,7 +113,7 @@ async def change_billing_cycle(
 @router.post("/apply-promo")
 async def apply_promotional_code(
     code: str = Body(..., embed=True),
-    subscription_service: SubscriptionService = Depends(get_subscription_service),
+    subscription_service: SubscriptionService = Depends(get_subscription_service()),
     current_user: User = Depends(get_current_user),
 ):
     """Apply a promotional code to subscription"""
@@ -128,7 +125,7 @@ async def create_checkout_session(
     request: Request,
     billing_cycle: str = Body(BillingCycle.MONTHLY, embed=True),
     promotional_code: Optional[str] = Body(None, embed=True),
-    subscription_service: SubscriptionService = Depends(get_subscription_service),
+    subscription_service: SubscriptionService = Depends(get_subscription_service()),
     current_user: User = Depends(get_current_user),
 ):
     """Create a Stripe Checkout session for subscription payment"""
@@ -149,7 +146,7 @@ async def create_checkout_session(
 @router.post("/webhook", include_in_schema=False)
 async def stripe_webhook(
     request: Request,
-    subscription_service: SubscriptionService = Depends(get_subscription_service),
+    subscription_service: SubscriptionService = Depends(get_subscription_service()),
 ):
     """Handle Stripe webhook events"""
     # Get the webhook signature sent by Stripe
@@ -166,7 +163,7 @@ async def stripe_webhook(
 @router.get("/trial-notification")
 async def get_trial_notification(
     current_user: User = Depends(get_current_user),
-    subscription_service: SubscriptionService = Depends(get_subscription_service),
+    subscription_service: SubscriptionService = Depends(get_subscription_service()),
 ):
     """
     Get notification information about the user's trial status.
@@ -178,18 +175,15 @@ async def get_trial_notification(
     response = {
         "has_notification": False,
         "message": "",
-        "status": subscription["status"],
-        "trial_end": subscription.get("trial_end"),
+        "status": subscription.status,
+        "trial_end": subscription.trial_end,
     }
 
     # Check if user is on a trial
-    if subscription["status"] == SubscriptionStatus.TRIALING and subscription.get(
-        "trial_end"
-    ):
+    if subscription.status == SubscriptionStatus.TRIALING and subscription.trial_end:
         # Calculate days remaining
         now = datetime.utcnow()
-        trial_end = subscription["trial_end"]
-        days_remaining = (trial_end - now).days
+        days_remaining = (subscription.trial_end - now).days
 
         # If less than 3 days remaining, show a warning
         if days_remaining <= 3:
@@ -204,7 +198,7 @@ async def get_trial_notification(
                 ] = f"Your trial ends in {days_remaining} {'day' if days_remaining == 1 else 'days'}. Subscribe now to avoid interruption."
 
     # Check if trial has expired
-    elif subscription["status"] == SubscriptionStatus.TRIAL_EXPIRED:
+    elif subscription.status == SubscriptionStatus.TRIAL_EXPIRED:
         response["has_notification"] = True
         response[
             "message"

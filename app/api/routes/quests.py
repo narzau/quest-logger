@@ -18,6 +18,7 @@ from app.core.exceptions import ProcessingException, BusinessException
 from app.core.config import settings
 from app.services.quest_service import QuestService
 from app.core.logging import log_context
+from app.schemas.subscription import SubscriptionStatus
 
 # Set up logger
 logger = logging.getLogger(__name__)
@@ -60,9 +61,10 @@ def create_quest(
     quest_in: schemas.QuestCreate,
     current_user: models.User = Depends(deps.get_current_active_user),
     quest_service: QuestService = Depends(deps.get_quest_service()),
+    subscription_status: SubscriptionStatus = Depends(deps.validate_active_subscription),
 ) -> Any:
     """
-    Create new quest.
+    Create new quest - requires active subscription.
     """
     with log_context(
         user_id=current_user.id, action="create_quest", quest_title=quest_in.title
@@ -187,6 +189,7 @@ async def create_quest_from_voice(
     google_calendar: Optional[bool] = Form(False),
     language: Optional[str] = Form(None),
     current_user: models.User = Depends(deps.get_current_active_user),
+    gen_access: tuple[SubscriptionStatus, float] = Depends(deps.validate_audio_gen_access),
     quest_service: QuestService = Depends(deps.get_quest_service()),
 ) -> Any:
     """
@@ -204,11 +207,13 @@ async def create_quest_from_voice(
             f"User {current_user.id} creating quest from voice file: {audio_file.filename}"
         )
         try:
+            _subscription_status, audio_duration_minutes = gen_access
             return await quest_service.create_quest_from_voice(
                 user_id=current_user.id,
                 audio_file=audio_file,
                 google_calendar=google_calendar,
                 language=language,
+                audio_duration_minutes=audio_duration_minutes,
             )
         except ProcessingException as e:
             logger.error(f"Error processing voice for quest creation: {str(e)}")
@@ -236,6 +241,7 @@ async def suggest_quest_from_voice(
     audio_file: UploadFile = File(...),
     language: Optional[str] = Form(None),
     current_user: models.User = Depends(deps.get_current_active_user),
+    gen_access: tuple[SubscriptionStatus, float] = Depends(deps.validate_audio_gen_access),
     quest_service: QuestService = Depends(deps.get_quest_service()),
 ) -> Any:
     """
@@ -254,9 +260,12 @@ async def suggest_quest_from_voice(
         )
 
         try:
+            _subscription_status, audio_duration_minutes = gen_access
             return await quest_service.suggest_quest_from_voice(
                 audio_file=audio_file,
                 language=language,
+                user_id=current_user.id,
+                audio_duration_minutes=audio_duration_minutes,
             )
         except ProcessingException as e:
             logger.error(f"Error processing voice for quest suggestion: {str(e)}")

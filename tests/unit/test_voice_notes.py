@@ -152,34 +152,7 @@ class TestVoiceNoteProcessing:
         assert "Don't analyze the language" in prompt
         assert 'Format and structure the content appropriately' in prompt
     
-    @pytest.mark.asyncio
-    async def test_process_existing_audio(self, note_service):
-        """Test processing existing audio notes"""
-        # Create mock note with raw transcript
-        mock_note = MagicMock()
-        mock_note.id = 1
-        mock_note.raw_transcript = "This is an existing transcript"
-        mock_note.note_style = NoteStyle.ACADEMIC_PAPER
-        
-        note_service.repository.get_user_note.return_value = mock_note
-        
-        # Create a mock for get_stt_service()
-        with patch("app.services.note_service.get_stt_service") as mock_get_stt:
-            # Process the existing audio note
-            result = await note_service.process_existing_audio(1, 1)
-            
-            # Verify the result
-            assert result["id"] == 1
-            assert result["status"] == "completed"
-            
-            # Check that the prompt was adapted to the style
-            call_args = note_service.chat_completion_service.call_llm_api.call_args_list[0][1]
-            prompt = call_args.get("prompt", "")
-            
-            # Verify prompt contains expected elements
-            assert f'following the "{NoteStyle.ACADEMIC_PAPER.value}" style' in prompt
-            assert "Format and structure the content appropriately" in prompt
-    
+
     @pytest.mark.asyncio
     async def test_summary_prompt(self, note_service, mock_audio_file, mock_audio_info, mock_stt_service):
         """Test the summary prompt for voice notes"""

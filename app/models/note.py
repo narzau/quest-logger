@@ -76,3 +76,11 @@ class Note(Base):
     ai_processed = Column(Boolean, default=False)  # Whether AI processing was applied
     ai_summary = Column(Text, nullable=True)  # AI-generated summary
     extracted_action_items = Column(Text, nullable=True)  # AI-extracted action items
+    
+    # Usage tracking fields
+    minutes_tracked = Column(Float, nullable=True)  # Minutes tracked for this note
+    minutes_refunded = Column(Boolean, nullable=True)  # Whether minutes were refunded
+    
+    # Processing status fields
+    processing_status = Column(String, default="pending")  # pending, processing, completed, error
+    processing_error = Column(String, nullable=True)  # Error message if processing failed

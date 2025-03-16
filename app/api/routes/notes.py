@@ -1,16 +1,26 @@
-from typing import Dict, Any, List, Optional
+from typing import Dict, Optional
 import logging
 
-from fastapi import APIRouter, Depends, UploadFile, File, Form, BackgroundTasks, Query
+from fastapi import APIRouter, Depends, UploadFile, File, Form
 from fastapi.responses import Response
 
-from app.api.deps import get_current_user, get_db, get_note_service
+from app.api.deps import (
+    get_current_user,
+    get_note_service,
+    validate_audio_gen_access,
+    validate_active_subscription
+)
 from app.models import User
 from app.models.note import NoteStyle, NoteExportFormat
 from app.services.note_service import NoteService
-from app.schemas.note import NoteCreate, NoteUpdate, Note, VoiceNoteCreate, NoteList
+from app.schemas.note import (
+    NoteCreate, NoteUpdate, Note, VoiceNoteCreate, NoteList,
+    ShareLinkResponse, UnshareResponse, 
+    ExportResponse,
+    FolderListResponse, TagListResponse
+)
 from app.core.logging import log_context
-from app.core.exceptions import ValidationException
+from app.schemas.subscription import SubscriptionStatus
 
 # Set up logger
 logger = logging.getLogger(__name__)
@@ -21,10 +31,11 @@ router = APIRouter()
 @router.post("/", response_model=Note)
 async def create_note(
     data: NoteCreate,
+    subscription_status: SubscriptionStatus = Depends(validate_active_subscription),
     note_service: NoteService = Depends(get_note_service()),
     current_user: User = Depends(get_current_user),
-):
-    """Create a new text note"""
+) -> Note:
+    """Create a new text note - requires active subscription"""
     # Add user info to logging context
     with log_context(user_id=current_user.id, action="create_note"):
         logger.info(f"Creating note: {data.title}")
@@ -36,7 +47,7 @@ async def get_note(
     note_id: int,
     note_service: NoteService = Depends(get_note_service()),
     current_user: User = Depends(get_current_user),
-):
+) -> Note:
     """Get a note by ID"""
     with log_context(user_id=current_user.id, note_id=note_id, action="get_note"):
         return await note_service.get_note(current_user.id, note_id)
@@ -45,7 +56,7 @@ async def get_note(
 @router.get("/shared/{share_id}", response_model=Note)
 async def get_shared_note(
     share_id: str, note_service: NoteService = Depends(get_note_service())
-):
+) -> Note:
     """Get a note by public share ID (no authentication required)"""
     with log_context(share_id=share_id, action="get_shared_note"):
         return await note_service.get_public_note(share_id)
@@ -62,7 +73,7 @@ async def list_notes(
     search: Optional[str] = None,
     sort_by: str = "updated_at",
     sort_order: str = "desc",
-):
+) -> NoteList:
     """Get a list of notes with pagination and filtering"""
     with log_context(
         user_id=current_user.id,
@@ -82,19 +93,19 @@ async def update_note(
     data: NoteUpdate,
     note_service: NoteService = Depends(get_note_service()),
     current_user: User = Depends(get_current_user),
-):
+) -> Note:
     """Update a note"""
     with log_context(user_id=current_user.id, note_id=note_id, action="update_note"):
         logger.info(f"Updating note {note_id}")
         return await note_service.update_note(current_user.id, note_id, data)
 
 
-@router.delete("/{note_id}")
+@router.delete("/{note_id}", response_model=Dict[str, str])
 async def delete_note(
     note_id: int,
     note_service: NoteService = Depends(get_note_service()),
     current_user: User = Depends(get_current_user),
-):
+) -> Dict[str, str]:
     """Delete a note"""
     with log_context(user_id=current_user.id, note_id=note_id, action="delete_note"):
         logger.info(f"Deleting note {note_id}")
@@ -102,128 +113,93 @@ async def delete_note(
         return {"status": "success"}
 
 
-@router.get("/folders/list", response_model=Dict[str, List[str]])
+@router.get("/folders/list", response_model=FolderListResponse)
 async def list_folders(
     note_service: NoteService = Depends(get_note_service()),
     current_user: User = Depends(get_current_user),
-):
+) -> FolderListResponse:
     """Get a list of unique folders used by the user"""
     with log_context(user_id=current_user.id, action="list_folders"):
         return await note_service.get_folders(current_user.id)
 
 
-@router.get("/tags/list", response_model=Dict[str, List[str]])
+@router.get("/tags/list", response_model=TagListResponse)
 async def list_tags(
     note_service: NoteService = Depends(get_note_service()),
     current_user: User = Depends(get_current_user),
-):
+) -> TagListResponse:
     """Get a list of unique tags used by the user"""
     with log_context(user_id=current_user.id, action="list_tags"):
         return await note_service.get_tags(current_user.id)
 
 
-@router.post("/{note_id}/share", response_model=Dict[str, Any])
+@router.post("/voice", response_model=Note)
+async def create_voice_note(
+    audio_file: UploadFile = File(...),
+    title: str = Form(...),
+    note_style: NoteStyle = Form(NoteStyle.STANDARD),
+    folder: Optional[str] = Form(None),
+    current_user: User = Depends(get_current_user),
+    gen_access: tuple[SubscriptionStatus, float] = Depends(validate_audio_gen_access),
+    note_service: NoteService = Depends(get_note_service()),
+) -> Note:
+    """Create a new note from voice recording - requires active subscription"""
+    with log_context(
+        user_id=current_user.id, action="create_voice_note", note_style=note_style.value
+    ):
+        logger.info(f"Processing voice note: {title}")
+
+        _subscription_status, audio_duration_minutes = gen_access
+        # Return the audio duration for the service to use
+        note_data = VoiceNoteCreate(
+            title=title, note_style=note_style, folder=folder
+        )
+        return await note_service.create_voice_note(current_user.id, audio_file, note_data, audio_duration_minutes)
+
+
+
+@router.post("/{note_id}/share", response_model=ShareLinkResponse)
 async def share_note(
     note_id: int,
     note_service: NoteService = Depends(get_note_service()),
     current_user: User = Depends(get_current_user),
-):
-    """Generate a public shareable link for a note"""
+) -> ShareLinkResponse:
+    """Generate a public share link for a note - no subscription required"""
     with log_context(user_id=current_user.id, note_id=note_id, action="share_note"):
         logger.info(f"Generating share link for note {note_id}")
-        return await note_service.generate_share_link(current_user.id, note_id)
+        return await note_service.share_note(current_user.id, note_id)
 
 
-@router.delete("/{note_id}/share")
+@router.delete("/share/{note_id}", response_model=UnshareResponse)
 async def unshare_note(
     note_id: int,
     note_service: NoteService = Depends(get_note_service()),
     current_user: User = Depends(get_current_user),
-):
-    """Remove public sharing for a note"""
+) -> UnshareResponse:
+    """Remove public share link for a note - no subscription required"""
     with log_context(user_id=current_user.id, note_id=note_id, action="unshare_note"):
         logger.info(f"Removing share link for note {note_id}")
-        return await note_service.remove_share_link(current_user.id, note_id)
+        return await note_service.unshare_note(current_user.id, note_id)
 
 
-@router.post("/voice", response_model=Note)
-async def create_voice_note(
-    file: UploadFile = File(...),
-    title: str = Form(...),
-    folder: Optional[str] = Form(None),
-    note_style: Optional[str] = Form("standard"),
-    tags: Optional[str] = Form(None),
-    quest_id: Optional[int] = Form(None),
-    note_service: NoteService = Depends(get_note_service()),
-    current_user: User = Depends(get_current_user),
-):
-    """Create a new voice note with audio upload and transcription"""
-    # Validate note_style using the enum
-    try:
-        note_style_enum = NoteStyle(note_style)
-    except ValueError:
-        # If invalid style provided, use the default
-        note_style_enum = NoteStyle.STANDARD
-        logger.warning(f"Invalid note style '{note_style}', using default 'standard' instead")
-
-    # Create voice note data
-    voice_note_data = VoiceNoteCreate(
-        title=title, folder=folder, note_style=note_style_enum, tags=tags, quest_id=quest_id
-    )
-
-    with log_context(
-        user_id=current_user.id,
-        action="create_voice_note",
-        filename=file.filename,
-        note_style=note_style_enum,
-    ):
-        logger.info(f"Processing voice note: {title}, file: {file.filename}")
-        return await note_service.process_audio_upload(
-            current_user.id, file, voice_note_data
-        )
-
-
-@router.post("/{note_id}/process", response_model=Dict[str, Any])
-async def process_note_audio(
-    note_id: int,
-    note_service: NoteService = Depends(get_note_service()),
-    current_user: User = Depends(get_current_user),
-):
-    """Process an existing audio note with AI features"""
-    with log_context(user_id=current_user.id, note_id=note_id, action="process_audio"):
-        logger.info(f"Processing existing audio for note {note_id}")
-        return await note_service.process_existing_audio(current_user.id, note_id)
-
-
-@router.get("/{note_id}/export")
+@router.post("/{note_id}/export", response_model=ExportResponse)
 async def export_note(
     note_id: int,
-    format: str = Query("text"),
+    format: NoteExportFormat,
     note_service: NoteService = Depends(get_note_service()),
     current_user: User = Depends(get_current_user),
-):
-    """Export a note in the specified format (text, markdown, pdf)"""
-    # Validate format using the enum
-    try:
-        format_enum = NoteExportFormat(format)
-    except ValueError:
-        # If invalid format provided, use the default
-        format_enum = NoteExportFormat.TEXT
-        logger.warning(f"Invalid export format '{format}', using default 'text' instead")
-    
+) -> ExportResponse:
+    """Export a note to a different format - no subscription required"""
     with log_context(
-        user_id=current_user.id, note_id=note_id, format=format_enum, action="export_note"
+        user_id=current_user.id,
+        note_id=note_id,
+        action="export_note",
+        format=format.value,
     ):
-        logger.info(f"Exporting note {note_id} in {format_enum} format")
-        
-        # Get the exported note content and metadata
-        result = await note_service.export_note(current_user.id, note_id, format_enum)
-        
-        # Return the file as a downloadable response
+        logger.info(f"Exporting note {note_id} to {format.value}")
+        result = await note_service.export_note(current_user.id, note_id, format)
         return Response(
-            content=result["content"],
-            media_type=result["content_type"],
-            headers={
-                "Content-Disposition": f'attachment; filename="{result["filename"]}"',
-            },
+            content=result.content,
+            media_type=result.content_type,
+            headers={"Content-Disposition": f"attachment; filename={result.filename}"},
         )

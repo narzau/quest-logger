@@ -1,7 +1,9 @@
 # app/schemas/token.py
-from typing import Optional, Dict, Any
+from typing import Optional
 
 from pydantic import BaseModel
+
+from app.schemas.subscription import SubscriptionStatus
 
 
 class UserInfo(BaseModel):
@@ -14,7 +16,7 @@ class Token(BaseModel):
     access_token: str
     token_type: str
     user: UserInfo
-    subscription: Optional[Dict[str, Any]] = None
+    subscription: SubscriptionStatus
 
 
 class TokenPayload(BaseModel):

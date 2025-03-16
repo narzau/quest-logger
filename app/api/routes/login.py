@@ -27,7 +27,7 @@ async def login_access_token(
     subscription_service: SubscriptionService = Depends(
         deps.get_subscription_service()
     ),
-) -> Any:
+) -> schemas.Token:
     """
     Login with email/username and password, get an access token for future requests
     """

@@ -20,7 +20,7 @@ logger = setup_logging()
 
 
 # Background task for checking expired trials
-async def check_expired_trials():
+async def check_expired_subscriptions():
     while True:
         try:
             # Create a new database session
@@ -28,11 +28,21 @@ async def check_expired_trials():
             try:
                 # Check and update expired trials
                 subscription_service = SubscriptionService(db)
-                updated_count = (
+                
+                # Check for expired trials
+                trial_updated_count = (
                     await subscription_service.check_and_update_expired_trials()
                 )
-                if updated_count > 0:
-                    logger.info(f"Updated {updated_count} expired trial subscriptions")
+                if trial_updated_count > 0:
+                    logger.info(f"Updated {trial_updated_count} expired trial subscriptions")
+                
+                # Check for expired regular subscriptions
+                subscription_updated_count = (
+                    await subscription_service.check_and_update_expired_subscriptions()
+                )
+                if subscription_updated_count > 0:
+                    logger.info(f"Updated {subscription_updated_count} expired active subscriptions")
+                
             finally:
                 db.close()
 
@@ -55,7 +65,7 @@ async def lifespan(app: FastAPI):
     logger.info("Services registered")
 
     # Start background tasks on startup
-    background_task = asyncio.create_task(check_expired_trials())
+    background_task = asyncio.create_task(check_expired_subscriptions())
 
     yield
 

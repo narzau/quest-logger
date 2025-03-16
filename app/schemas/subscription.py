@@ -65,3 +65,59 @@ class SubscriptionStatus(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+# Schema for subscription pricing information
+class PricingInfo(BaseModel):
+    price: dict
+    promotional_codes: List[dict]
+
+
+# Schema for share link responses
+class ShareLinkResponse(BaseModel):
+    share_id: Optional[str]
+    share_url: Optional[str]
+    already_shared: bool = False
+
+
+# Schema for unshare responses
+class UnshareResponse(BaseModel):
+    success: bool
+    already_unshared: bool = False
+
+
+# Schema for payment method response
+class PaymentMethodResponse(BaseModel):
+    id: int
+    brand: str
+    last4: str
+    exp_month: int
+    exp_year: int
+    is_default: bool
+
+
+# Schema for checkout session response
+class CheckoutSessionResponse(BaseModel):
+    session_id: str
+    checkout_url: str
+
+
+# Schema for webhook response
+class WebhookResponse(BaseModel):
+    status: str
+    event_type: str
+
+
+# Response for folders and tags
+class FolderListResponse(BaseModel):
+    folders: List[str]
+
+
+class TagListResponse(BaseModel):
+    tags: List[str]
+
+
+class ExportResponse(BaseModel):
+    content: bytes
+    content_type: str
+    filename: str

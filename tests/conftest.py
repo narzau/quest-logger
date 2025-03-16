@@ -159,7 +159,6 @@ def mock_note_service():
     """Mock note service for testing."""
     service = MagicMock(spec=NoteService)
     service.process_audio_upload = AsyncMock()
-    service.process_existing_audio = AsyncMock()
     service.export_note = AsyncMock()
     service.get_user_notes = AsyncMock()
     service.get_user_note = AsyncMock()

@@ -53,6 +53,8 @@ class Note(NoteBase):
     ai_summary: Optional[str] = None
     extracted_action_items: Optional[str] = None
     public_share_id: Optional[str] = None
+    processing_status: Optional[str] = None
+    processing_error: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -100,3 +102,42 @@ class NoteList(BaseModel):
     page: int
     size: int
     pages: int
+
+
+# Response for share link operations
+class ShareLinkResponse(BaseModel):
+    share_id: Optional[str] = None
+    share_url: Optional[str] = None
+    already_shared: bool = False
+
+
+# Response for unshare operations
+class UnshareResponse(BaseModel):
+    success: bool
+    already_unshared: bool = False
+
+
+# Response for folders list
+class FolderListResponse(BaseModel):
+    folders: List[str]
+
+
+# Response for tags list
+class TagListResponse(BaseModel):
+    tags: List[str]
+
+
+# Response for export operations
+class ExportResponse(BaseModel):
+    content: bytes
+    content_type: str
+    filename: str
+
+
+# Response for audio processing
+class AudioProcessingResponse(BaseModel):
+    success: bool
+    note_id: int
+    title: str
+    transcript_length: int
+    audio_duration: float
