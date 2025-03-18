@@ -13,9 +13,9 @@ from sqlalchemy import (
 from sqlalchemy.orm import relationship
 
 from app.db.base import Base
+from enum import StrEnum
 
-
-class QuestRarity(str, enum.Enum):
+class QuestRarity(StrEnum):
     COMMON = "common"
     UNCOMMON = "uncommon"
     RARE = "rare"
@@ -23,7 +23,7 @@ class QuestRarity(str, enum.Enum):
     LEGENDARY = "legendary"
 
 
-class QuestType(str, enum.Enum):
+class QuestType(StrEnum):
     DAILY = "daily"
     REGULAR = "regular"
     EPIC = "epic"

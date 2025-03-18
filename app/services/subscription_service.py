@@ -135,12 +135,12 @@ class SubscriptionService:
         # Create Stripe subscription with trial if requested
         trial_days = 7 if trial else 0
         subscription = await self.stripe_client.create_subscription(
-            customer["id"], billing_cycle.value, trial_days, promotional_code
+            customer["id"], billing_cycle, trial_days, promotional_code
         )
 
         # Create local subscription record
         subscription_data = SubscriptionCreate(
-            billing_cycle=billing_cycle.value,
+            billing_cycle=billing_cycle,
             promotional_code=promotional_code,
             stripe_subscription_id=subscription["id"],
             stripe_customer_id=customer["id"],
@@ -216,7 +216,7 @@ class SubscriptionService:
         if not subscription:
             raise HTTPException(status_code=404, detail="Subscription not found")
 
-        if subscription.billing_cycle == new_cycle.value:
+        if subscription.billing_cycle == new_cycle:
             subscription_status = self.repository.get_subscription_status(user_id)
             return SubscriptionStatus(**subscription_status)
 
@@ -224,7 +224,7 @@ class SubscriptionService:
         # or by creating a new subscription with the new cycle
         # For simplicity, we'll just update our local record
         update_data = SubscriptionUpdate(
-            billing_cycle=new_cycle.value,
+            billing_cycle=new_cycle,
         )
 
         self.repository.update_subscription(subscription, update_data)

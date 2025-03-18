@@ -7,7 +7,7 @@ from sqlalchemy import desc, func
 
 from app.repositories.base_repository import BaseRepository
 from app.models import Note
-from app.schemas.note import NoteCreate, NoteUpdate, VoiceNoteCreate
+from app.schemas.note import NoteCreate, NoteUpdate, VoiceNoteCreate, ProcessedVoiceNoteCreate, NoteProcessingStatus
 
 
 class NoteRepository(BaseRepository[Note]):
@@ -40,19 +40,15 @@ class NoteRepository(BaseRepository[Note]):
         owner_id: int,
         obj_in: VoiceNoteCreate,
         audio_duration_minutes: float,
-        language: str = "en",
     ) -> Note:
         """Create a voice note with audio information but without storing the audio file"""
         note = Note(
             owner_id=owner_id,
-            title=obj_in.title,
-            audio_duration=audio_duration_minutes * 60,  # Convert to seconds for consistency
-            language=language,
+            title="Note is being processed",
+            audio_duration=audio_duration_minutes,
             folder=obj_in.folder,
             note_style=obj_in.note_style,
             tags=obj_in.tags,
-            quest_id=obj_in.quest_id,
-            processing_status="pending",  # Set initial processing status
         )
         self.db.add(note)
         self.db.commit()
@@ -62,30 +58,14 @@ class NoteRepository(BaseRepository[Note]):
     def create_voice_note_with_content(
         self,
         owner_id: int,
-        obj_in: VoiceNoteCreate,
-        raw_transcript: str,
-        content: str,
-        ai_summary: Optional[str] = None,
-        action_items: Optional[str] = None,
-        audio_duration: float = 0.0,
-        language: str = "en",
+        obj_in: ProcessedVoiceNoteCreate,
     ) -> Note:
         """Create a voice note with all processed content"""
         note = Note(
             owner_id=owner_id,
-            title=obj_in.title,
-            raw_transcript=raw_transcript,
-            content=content,
-            ai_summary=ai_summary,
-            extracted_action_items=action_items,
-            audio_duration=audio_duration,
-            language=language,
-            folder=obj_in.folder,
-            note_style=obj_in.note_style,
-            tags=obj_in.tags,
-            quest_id=obj_in.quest_id,
-            ai_processed=True,  # Mark as AI processed since we've done all the processing
-            processing_status="completed",  # Set processing status to completed
+            **obj_in.model_dump(exclude={"audio_file", "processing_status", "language"}),
+            processing_status=obj_in.processing_status if obj_in.processing_status else None,
+            language=obj_in.language if obj_in.language else None
         )
         self.db.add(note)
         self.db.commit()
@@ -222,7 +202,7 @@ class NoteRepository(BaseRepository[Note]):
             note.extracted_action_items = extracted_action_items
 
         note.updated_at = datetime.utcnow()
-        note.processing_status = "completed"  # Update processing status to completed
+        note.processing_status = NoteProcessingStatus.COMPLETED # Update processing status to completed
 
         self.db.add(note)
         self.db.commit()

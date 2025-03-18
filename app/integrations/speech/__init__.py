@@ -1,9 +1,8 @@
-from app.integrations.speech.base import BaseSTTService
-from app.integrations.speech.factory import STTServiceFactory
+from app.integrations.speech.deepgram_stt_client import DeepgramSTTClient
 
-
-def get_stt_service() -> BaseSTTService:
+def get_stt_client() -> DeepgramSTTClient:
     """
     Provides an LLMService instance for dependency injection.
     """
-    return STTServiceFactory.create(provider="deepgram")
+    return DeepgramSTTClient()
+

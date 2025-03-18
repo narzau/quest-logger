@@ -14,10 +14,11 @@ from app.models import Note
 from app.models.note import NoteStyle, NoteExportFormat
 from app.repositories.note_repository import NoteRepository
 from app.repositories.subscription_repository import SubscriptionRepository
-from app.integrations.speech import get_stt_service
+from app.integrations.speech import get_stt_client
 from app.integrations.chat_completion import ChatCompletionService
 from app.core.config import settings
 from app.core.exceptions import ProcessingException
+from app.schemas.note import ProcessedVoiceNoteCreate, NoteProcessingStatus
 from app.core.constants import get_style_system_prompt
 # Set up module logger
 logger = logging.getLogger(__name__)
@@ -29,7 +30,7 @@ class NoteService:
     def __init__(self, db: Session):
         self.repository = NoteRepository(db)
         self.subscription_repository = SubscriptionRepository(db)
-        self.speech_service = get_stt_service()
+        self.speech_client = get_stt_client()
         self.chat_completion_service = ChatCompletionService()
 
     async def create_note(self, user_id: int, data: NoteCreate) -> Note:
@@ -48,7 +49,7 @@ class NoteService:
 
                     # Process content with AI
                     prompt = f"""
-                    Process this content according to the {data.note_style.value} style:
+                    Process this content according to the {data.note_style} style:
                     {data.content}
                     """
 
@@ -139,104 +140,7 @@ class NoteService:
         if not note:
             logger.warning(f"Note {note_id} not found for user {user_id} during update")
             raise HTTPException(status_code=404, detail="Note not found")
-
-        # Check if note style is changing and AI processing is needed
-        style_changed = (
-            data.note_style is not None and data.note_style != note.note_style
-        )
-        content_changed = data.content is not None and data.content != note.content
-
-        # Check if AI processing should be applied
-        should_process_with_ai = False
-
-        if (style_changed or content_changed) and note.content:
-            # Check if user has permission for AI processing
-            subscription = self.subscription_repository.get_by_user_id(user_id)
-            should_process_with_ai = subscription and subscription.advanced_ai_features
-
-        if should_process_with_ai:
-            logger.info(f"Processing updated note {note_id} with AI for user {user_id}")
-            try:
-                # Get note style (use new style if provided, otherwise existing style)
-                note_style = data.note_style or note.note_style
-
-                # Get content (use new content if provided, otherwise existing content)
-                content = data.content if data.content is not None else note.content
-
-                if content:  # Only process if there's content
-                    # Get system prompt based on note style
-                    style_system_prompt = get_style_system_prompt(note_style)
-
-                    # Process content with AI
-                    prompt = f"""
-                    Process this content according to the {note_style.value} style:
-                    {content}
-                    """
-
-                    processed_content = await self.chat_completion_service.call_llm_api(
-                        prompt=prompt,
-                        system_prompt=style_system_prompt,
-                        temperature=0.7,
-                    )
-
-                    if processed_content:
-                        data.content = processed_content
-
-                    # Generate summary
-                    if note_style not in [
-                        NoteStyle.SUMMARY
-                    ]:  # Don't summarize a summary
-                        summary_prompt = f"""
-                        Create a concise summary (3-5 sentences) of the main points in this content:
-                        {content}
-                        """
-                        summary_system_prompt = """
-                        You are a summarization expert. Your task is to extract the key points from a piece of content 
-                        and present them in a concise, clear manner. Focus on the most important information.
-                        """
-
-                        summary_result = (
-                            await self.chat_completion_service.call_llm_api(
-                                prompt=summary_prompt,
-                                system_prompt=summary_system_prompt,
-                                temperature=0.5,
-                            )
-                        )
-
-                        if summary_result:
-                            data.ai_summary = summary_result
-
-                    # Extract action items if applicable
-                    if note_style in [
-                        NoteStyle.ACTION_ITEMS,
-                        NoteStyle.TASK_LIST,
-                        NoteStyle.MEETING_NOTES,
-                    ]:
-                        action_prompt = f"""
-                        Extract all action items, tasks or to-dos mentioned in this content:
-                        {content}
-                        
-                        Format as a bulleted list. If no specific actions are mentioned, respond with "No action items identified."
-                        """
-                        action_system_prompt = """
-                        You are an action item extraction specialist. Your task is to identify all tasks, 
-                        to-dos, and action items mentioned in the content. Format them as a clear, actionable list.
-                        """
-
-                        action_result = await self.chat_completion_service.call_llm_api(
-                            prompt=action_prompt,
-                            system_prompt=action_system_prompt,
-                            temperature=0.3,
-                        )
-
-                        if action_result:
-                            data.extracted_action_items = action_result
-            except Exception as e:
-                logger.error(
-                    f"Error processing note update with AI: {str(e)}", exc_info=True
-                )
-                # Continue with the update using the original data if AI processing fails
-
+        
         return self.repository.update_note(note, data)
 
     async def delete_note(self, user_id: int, note_id: int) -> None:
@@ -434,7 +338,7 @@ class NoteService:
         return "\n".join(lines)
     
     async def create_voice_note(
-        self, user_id: int, audio_file: UploadFile, note_data: VoiceNoteCreate, audio_duration_minutes: float
+        self, user_id: int, note_data: VoiceNoteCreate, audio_duration_minutes: float
     ) -> Note:
         """Create a new note from voice recording"""
         logger.info(f"Creating voice note for user {user_id}")
@@ -446,21 +350,15 @@ class NoteService:
             if is_processing_sync:
                 # For short audio, process synchronously and create with processed content
                 logger.info(f"Processing short audio synchronously for user {user_id}")
-                processed_result = await self.process_audio_upload_sync(user_id, audio_file, note_data)
+                processed_voice_note_data = await self.process_audio_upload_sync(user_id, note_data, audio_duration_minutes)
                 
                 # Track usage AFTER successful processing for sync processing
                 self.subscription_repository.track_usage(user_id, audio_duration_minutes)
-                
                 # Create note with processed data
                 note = self.repository.create_voice_note_with_content(
                     user_id,
-                    note_data,
-                    raw_transcript=processed_result["raw_transcript"],
-                    content=processed_result["content"],
-                    audio_duration=audio_duration_minutes * 60,
-                    language=processed_result["language"],
+                    processed_voice_note_data
                 )
-                note.processing_status = "completed"
             else:
                 # For longer audio, first track usage, then create note, then process asynchronously
                 # We'll need to potentially refund minutes if processing fails
@@ -471,7 +369,7 @@ class NoteService:
                     note_data,
                     audio_duration_minutes=audio_duration_minutes,
                 )
-                note.processing_status = "processing"
+                note.processing_status = NoteProcessingStatus.PROCESSING
                 self.repository.save(note)
                 
                 # Track usage for async processing, but store the tracking info on the note
@@ -481,11 +379,11 @@ class NoteService:
                 self.repository.save(note)
                 
                 # Make a copy of the file for async processing
-                await audio_file.seek(0)
+                await note_data.audio_file.seek(0)
                 
                 # Process audio asynchronously
                 asyncio.create_task(
-                    self.process_audio_upload_async(user_id, note.id, audio_file, note_data)
+                    self.process_audio_upload_async(user_id, note.id, note_data)
                 )
             
             return note
@@ -499,8 +397,8 @@ class NoteService:
             )
 
     async def process_audio_upload_sync(
-        self, user_id: int, audio_file: UploadFile, note_data: VoiceNoteCreate
-    ) -> dict:
+        self, user_id: int, note_data: VoiceNoteCreate, audio_duration_minutes: float
+    ) -> ProcessedVoiceNoteCreate:
         """
         Process audio synchronously for short voice recordings (<1 minute).
         
@@ -523,11 +421,10 @@ class NoteService:
         """
         try:
             # Reset file pointer to the beginning
-            await audio_file.seek(0)
+            await note_data.audio_file.seek(0)
             # Transcribe the audio
             logger.info(f"Starting synchronous audio transcription for user {user_id}")
-            transcription_result = await self.speech_service.transcribe(audio_file)
-
+            transcription_result = await self.speech_client.transcribe(note_data.audio_file, note_data.map_to_deepgram_language(note_data.language))
             raw_transcript = transcription_result.text
             if not raw_transcript:
                 logger.warning(f"Empty transcript received for user {user_id}")
@@ -538,18 +435,23 @@ class NoteService:
             logger.info(
                 f"Audio transcription complete, transcript length: {len(raw_transcript)} characters"
             )
-
+            print(f"Transcription language: {transcription_result.language}")
             # Process with AI to generate structured content
-            processed_content = await self._process_transcript_with_ai(
+            title, processed_content = await self._process_transcript_with_ai(
                 raw_transcript, note_data.note_style
             )
 
             # Return data for note creation
-            return {
-                "raw_transcript": raw_transcript,
-                "content": processed_content,
-                "language": transcription_result.language or "en"
-            }
+            return ProcessedVoiceNoteCreate(
+                **note_data.model_dump(exclude={"language"}),
+                title=title,
+                raw_transcript=raw_transcript,
+                content=processed_content,
+                language=transcription_result.map_to_note_language(transcription_result.language) if transcription_result.language else None,
+                ai_processed=True,
+                processing_status=NoteProcessingStatus.COMPLETED,
+                audio_duration=audio_duration_minutes
+            )
             
         except Exception as e:
             logger.error(f"Error in synchronous audio processing for user {user_id}: {str(e)}", exc_info=True)
@@ -557,7 +459,7 @@ class NoteService:
             raise
 
     async def process_audio_upload_async(
-        self, user_id: int, note_id: int, audio_file: UploadFile, note_data: VoiceNoteCreate
+        self, user_id: int, note_id: int, note_data: VoiceNoteCreate
     ) -> None:
         """
         Process audio asynchronously for longer voice recordings (>= 1 minute).
@@ -578,11 +480,10 @@ class NoteService:
         """
         try:
             # Reset file pointer to the beginning
-            await audio_file.seek(0)
+            await note_data.audio_file.seek(0)
             # Transcribe the audio
             logger.info(f"Starting asynchronous audio transcription for user {user_id}, note {note_id}")
-            transcription_result = await self.speech_service.transcribe(audio_file)
-
+            transcription_result = await self.speech_client.transcribe(note_data.audio_file, note_data.map_to_deepgram_language(note_data.language))
             raw_transcript = transcription_result.text
             if not raw_transcript:
                 logger.warning(f"Empty transcript received for user {user_id}")
@@ -595,7 +496,7 @@ class NoteService:
             )
 
             # Process with AI to generate structured content
-            processed_content = await self._process_transcript_with_ai(
+            title, processed_content = await self._process_transcript_with_ai(
                 raw_transcript, note_data.note_style
             )
             
@@ -605,12 +506,14 @@ class NoteService:
                 logger.error(f"Note {note_id} not found when updating with processed content")
                 return
             
+            
             # Update the note with the processed content
+            note.title = title
             note.content = processed_content
             note.raw_transcript = raw_transcript
-            note.language = transcription_result.language or "en"
+            note.language = transcription_result.map_to_note_language(transcription_result.language) if transcription_result.language else None
             note.ai_processed = True
-            note.processing_status = "completed"
+            note.processing_status = NoteProcessingStatus.COMPLETED
             
             self.repository.save(note)
             
@@ -623,7 +526,7 @@ class NoteService:
             try:
                 note = self.repository.get_user_note(user_id, note_id)
                 if note:
-                    note.processing_status = "error"
+                    note.processing_status = NoteProcessingStatus.ERROR
                     note.processing_error = str(e)[:255]  # Limit error message length
                     
                     # Refund the minutes if they were tracked for this note
@@ -641,7 +544,7 @@ class NoteService:
             except Exception as update_error:
                 logger.error(f"Failed to update note with error status: {str(update_error)}")
 
-    async def _process_transcript_with_ai(self, transcript: str, note_style: NoteStyle) -> tuple:
+    async def _process_transcript_with_ai(self, transcript: str, note_style: NoteStyle) -> tuple[Optional[str], Optional[str]]:
         """
         Process a transcript with AI to generate structured content, summary, and action items.
         
@@ -650,7 +553,8 @@ class NoteService:
             note_style: The user-selected note style
             
         Returns:
-            - processed_content: The AI-enhanced formatted content
+            - title: The title of the note
+            - content: The AI-enhanced formatted content
         """
 
         # Choose appropriate system prompt based on note style
@@ -658,18 +562,24 @@ class NoteService:
 
         # Generate structured content based on note style
         prompt = f"""
-        Transform this raw voice transcript into content following the "{note_style.value}" style. The transcript was: 
+        Transform this raw voice transcript into content following the "{note_style}" style. The transcript was: 
         
         "{transcript}"
         
-        Format and structure the content appropriately for a {note_style.value.replace('_', ' ')}.
+        Format and structure the content appropriately for a {note_style.replace('_', ' ')}.
+        The first line of the content should be the title of the note. It has to finish with a new line so I can properly parse it.
         Don't analyze the language or provide linguistic breakdowns - focus on creating the actual content.
         """
 
         processed_result = await self.chat_completion_service.call_llm_api(
             prompt=prompt, system_prompt=style_system_prompt, temperature=0.7
         )
-        return processed_result or transcript
+        if processed_result:
+            title = processed_result.split("\n")[0]
+            content = "\n".join(processed_result.split("\n")[1:])
+            return title, content
+        else:
+            return None, None
 
     def _generate_pdf(self, note_export: NoteExport) -> bytes:
         """Generate PDF from note data"""

@@ -32,7 +32,7 @@ async def get_pricing(
 
 @router.post("/subscribe")
 async def subscribe(
-    billing_cycle: str = Body(BillingCycle.MONTHLY.value, embed=True),
+    billing_cycle: str = Body(BillingCycle.MONTHLY, embed=True),
     trial: bool = Body(False, embed=True),
     promotional_code: Optional[str] = Body(None, embed=True),
     payment_method_id: Optional[str] = Body(None, embed=True),
@@ -44,7 +44,7 @@ async def subscribe(
     try:
         billing_cycle_enum = BillingCycle(billing_cycle)
     except ValueError:
-        raise ValidationException(f"Invalid billing cycle: {billing_cycle}", details={"valid_values": [e.value for e in BillingCycle]})
+        raise ValidationException(f"Invalid billing cycle: {billing_cycle}", details={"valid_values": [e for e in BillingCycle]})
 
     # Require payment method for subscription unless it's a trial
     if not payment_method_id and not trial:
@@ -105,7 +105,7 @@ async def change_billing_cycle(
     try:
         new_cycle_enum = BillingCycle(new_cycle)
     except ValueError:
-        raise ValidationException(f"Invalid billing cycle: {new_cycle}", details={"valid_values": [e.value for e in BillingCycle]})
+        raise ValidationException(f"Invalid billing cycle: {new_cycle}", details={"valid_values": [e for e in BillingCycle]})
 
     return await subscription_service.change_billing_cycle(current_user.id, new_cycle_enum)
 

@@ -1,12 +1,11 @@
 # app/services/speech_to_text/deepgram_service.py
 import os
-import tempfile
-from typing import Optional, Dict, Any, BinaryIO
 
+from typing import Optional
 from fastapi import UploadFile
 from app.core.config import settings
-from .base import BaseSTTService, TranscriptionResult
-
+from .base import BaseSTTClient, TranscriptionResult
+from enum import StrEnum
 # Import Deepgram SDK
 from deepgram import (
     DeepgramClient,
@@ -18,8 +17,36 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+# https://developers.deepgram.com/docs/language-detection
+class DeepgramLanguageEnum(StrEnum):
+    ES = "es"
+    EN = "en"
+    HI = "hi"
+    JA = "ja"
+    RU = "ru"
+    UK = "uk"
+    SV = "sv"
+    ZH = "zh"
+    PT = "pt"
+    NL = "nl"
+    TR = "tr"
+    FR = "fr"
+    DE = "de"
+    ID = "id"
+    KO = "ko"
+    IT = "it"
 
-class DeepgramSTTService(BaseSTTService):
+class DeepgramTranscriptionResult(TranscriptionResult):
+    language: Optional[DeepgramLanguageEnum] = None
+    
+    def map_to_note_language(self, language: DeepgramLanguageEnum):
+        try: 
+            from app.schemas.note import NoteLanguage
+            return NoteLanguage(language)
+        except ValueError:
+            return None
+
+class DeepgramSTTClient(BaseSTTClient):
     """
     Speech-to-text service using Deepgram's SDK
     """
@@ -28,14 +55,15 @@ class DeepgramSTTService(BaseSTTService):
         # Initialize the Deepgram client with the API key from settings
         # The SDK automatically reads from DEEPGRAM_API_KEY environment variable
         # We can also pass it explicitly if needed
+        
         self.client = DeepgramClient(api_key=settings.DEEPGRAM_API_KEY)
         self.model = getattr(settings, "DEEPGRAM_MODEL", "nova-2")
 
     async def transcribe(
         self,
         audio_file: UploadFile,
-        language: Optional[str] = None,
-    ) -> TranscriptionResult:
+        language: Optional[DeepgramLanguageEnum] = None,
+    ) -> DeepgramTranscriptionResult:
         """
         Transcribe audio using Deepgram SDK
 
@@ -75,7 +103,6 @@ class DeepgramSTTService(BaseSTTService):
             response = self.client.listen.rest.v("1").transcribe_file(
                 payload, options, timeout=settings.STT_TIMEOUT
             )
-
             # Extract results from response
             results = response.results
 
@@ -102,24 +129,17 @@ class DeepgramSTTService(BaseSTTService):
                 alternative.confidence if hasattr(alternative, "confidence") else None
             )
 
-            # Get detected language if available
-            detected_language = (
-                results.metadata.detected_language
-                if hasattr(results, "metadata")
-                and hasattr(results.metadata, "detected_language")
-                else language
-            )
 
-            return TranscriptionResult(
+            return DeepgramTranscriptionResult(
                 text=transcript,
-                language=detected_language,
+                language=DeepgramLanguageEnum(channel.detected_language) if channel.detected_language else None,
                 confidence=confidence,
                 translation=None,  # No translation from Deepgram
                 raw_response=results.to_dict(),
             )
 
         except Exception as e:
-            print(f"Error in Deepgram transcription: {str(e)}")
+            logger.error(f"Error in Deepgram transcription: {str(e)}")
             raise e
 
         finally:

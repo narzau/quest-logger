@@ -1,9 +1,9 @@
 # app/core/constants.py
-import enum
 from app.models.note import NoteStyle
+from enum import StrEnum
 
 # Subscription Status Constants
-class SubscriptionStatus:
+class SubscriptionStatus(StrEnum):
     ACTIVE = "active"
     CANCELED = "canceled"
     TRIALING = "trialing"
@@ -16,7 +16,7 @@ class SubscriptionStatus:
 
 
 # Billing Cycle Constants
-class BillingCycle(str, enum.Enum):
+class BillingCycle(StrEnum):
     MONTHLY = "monthly"
     ANNUAL = "annual"
 

@@ -16,7 +16,8 @@ from app.services.user_service import UserService
 from app.services.progression_service import ProgressionService
 from app.services.google_calendar_service import GoogleCalendarService
 from app.integrations.chat_completion import ChatCompletionService
-from app.integrations.speech import get_stt_service
+from app.integrations.speech import DeepgramSTTClient
+from app.integrations.speech.deepgram_stt_client import DeepgramLanguageEnum
 from app.services.subscription_service import SubscriptionService
 
 
@@ -34,7 +35,7 @@ class QuestService:
         self.calendar_service = GoogleCalendarService(db)
         self.chat_completion_service: ChatCompletionService = ChatCompletionService()
         self.subscription_service = SubscriptionService(db)
-        self.stt_service = get_stt_service()
+        self.stt_client = DeepgramSTTClient()
 
     def get_quests(
         self,
@@ -156,12 +157,12 @@ class QuestService:
         self,
         user_id: int,
         audio_file: File,
-        language: str,
         audio_duration_minutes: float,
         google_calendar: bool = False,
+        language: Optional[DeepgramLanguageEnum] = None,
     ) -> Quest:
         """Create a new quest from voice recording."""
-        transcription_result = await self.stt_service.transcribe(
+        transcription_result = await self.stt_client.transcribe(
             audio_file=audio_file,
             language=language,
         )
@@ -207,12 +208,12 @@ class QuestService:
     async def suggest_quest_from_voice(
         self,
         audio_file: File,
-        language: str,
         user_id: int,
         audio_duration_minutes: float,
+        language: Optional[DeepgramLanguageEnum] = None,
     ) -> schemas.QuestCreate:
         """Suggest a new quest from audio feedback"""
-        transcription_result = await self.stt_service.transcribe(
+        transcription_result = await self.stt_client.transcribe(
             audio_file=audio_file,
             language=language,
         )

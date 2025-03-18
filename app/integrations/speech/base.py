@@ -33,7 +33,7 @@ class TranscriptionResult:
         return self.translation if self.translation else self.text
 
 
-class BaseSTTService(ABC):
+class BaseSTTClient(ABC):
     """
     Abstract base class for all speech-to-text services
     """

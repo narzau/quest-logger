@@ -136,25 +136,27 @@ async def list_tags(
 @router.post("/voice", response_model=Note)
 async def create_voice_note(
     audio_file: UploadFile = File(...),
-    title: str = Form(...),
     note_style: NoteStyle = Form(NoteStyle.STANDARD),
     folder: Optional[str] = Form(None),
+    tags: Optional[str] = Form(None),
     current_user: User = Depends(get_current_user),
     gen_access: tuple[SubscriptionStatus, float] = Depends(validate_audio_gen_access),
     note_service: NoteService = Depends(get_note_service()),
 ) -> Note:
     """Create a new note from voice recording - requires active subscription"""
     with log_context(
-        user_id=current_user.id, action="create_voice_note", note_style=note_style.value
+        user_id=current_user.id, action="create_voice_note", note_style=note_style
     ):
-        logger.info(f"Processing voice note: {title}")
-
         _subscription_status, audio_duration_minutes = gen_access
+        logger.info(f"Audio duration: {audio_duration_minutes:.2f} minutes")
         # Return the audio duration for the service to use
         note_data = VoiceNoteCreate(
-            title=title, note_style=note_style, folder=folder
+            audio_file=audio_file,
+            note_style=note_style,
+            folder=folder,
+            tags=tags
         )
-        return await note_service.create_voice_note(current_user.id, audio_file, note_data, audio_duration_minutes)
+        return await note_service.create_voice_note(current_user.id, note_data, audio_duration_minutes)
 
 
 
@@ -194,9 +196,9 @@ async def export_note(
         user_id=current_user.id,
         note_id=note_id,
         action="export_note",
-        format=format.value,
+        format=format
     ):
-        logger.info(f"Exporting note {note_id} to {format.value}")
+        logger.info(f"Exporting note {note_id} to {format}")
         result = await note_service.export_note(current_user.id, note_id, format)
         return Response(
             content=result.content,

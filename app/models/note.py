@@ -11,12 +11,14 @@ from sqlalchemy import (
     Text,
     Float,
 )
+from enum import StrEnum
+
 from sqlalchemy.orm import relationship
 
 from app.db.base import Base
 
 
-class NoteStyle(str, enum.Enum):
+class NoteStyle(StrEnum):
     STANDARD = "standard"
     BULLET_POINTS = "bullet_points"
     SUMMARY = "summary"
@@ -34,7 +36,7 @@ class NoteStyle(str, enum.Enum):
     ACADEMIC_PAPER = "academic_paper"
 
 
-class NoteExportFormat(str, enum.Enum):
+class NoteExportFormat(StrEnum):
     TEXT = "text"
     MARKDOWN = "markdown"
     PDF = "pdf"

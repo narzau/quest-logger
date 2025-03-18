@@ -180,6 +180,7 @@ async def validate_available_recording_time(
     current_user: User = Depends(get_current_active_user),
 ) -> float:
     # validate the user has recording time left, even though they have an active subscription (or canceled with remaining time)
+
     subscription_status = await subscription_service.get_subscription_status(current_user.id)
     audio_info = await get_audio_info(audio_file)
     audio_duration: float = audio_info["duration"]
@@ -193,6 +194,7 @@ async def validate_available_recording_time(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=f"You have reached your monthly recording limit. You have {remaining:.1f} minutes remaining of your {subscription_status.minutes_limit} minute limit."
         )
+    return audio_duration_minutes
 
 async def validate_audio_gen_access(
     subscription_status: SubscriptionStatus = Depends(validate_active_subscription), # validate subscription access

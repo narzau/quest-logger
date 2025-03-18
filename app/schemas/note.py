@@ -1,9 +1,26 @@
+import enum
 from datetime import datetime
 from typing import Optional, List
 
-from pydantic import BaseModel, Field
-
+from fastapi import UploadFile
+from pydantic import BaseModel
 from app.models.note import NoteStyle
+from app.integrations.speech.deepgram_stt_client import DeepgramLanguageEnum
+from enum import StrEnum
+
+class NoteLanguage(StrEnum):
+    EN = "en"
+    DE = "de"
+    ES = "es"
+    FR = "fr"
+    IT = "it"
+    JA = "ja"
+    
+class NoteProcessingStatus(StrEnum):
+    PENDING = "pending"
+    PROCESSING = "processing"
+    COMPLETED = "completed"
+    ERROR = "error"
 
 
 # Base Schema
@@ -34,9 +51,6 @@ class NoteUpdate(BaseModel):
     note_style: Optional[NoteStyle] = None
     is_public: Optional[bool] = None
     quest_id: Optional[int] = None
-    # AI fields
-    ai_summary: Optional[str] = None
-    extracted_action_items: Optional[str] = None
     ai_processed: Optional[bool] = None
 
 
@@ -48,12 +62,12 @@ class Note(NoteBase):
     updated_at: datetime
     is_public: bool
     audio_duration: Optional[float] = None
-    language: Optional[str] = None
+    language: Optional[NoteLanguage] = None
     ai_processed: bool
     ai_summary: Optional[str] = None
     extracted_action_items: Optional[str] = None
     public_share_id: Optional[str] = None
-    processing_status: Optional[str] = None
+    processing_status: Optional[NoteProcessingStatus] = None
     processing_error: Optional[str] = None
 
     class Config:
@@ -62,13 +76,26 @@ class Note(NoteBase):
 
 # Voice Note Schema
 class VoiceNoteCreate(BaseModel):
-    title: str
+    audio_file: UploadFile
     folder: Optional[str] = None
-    note_style: NoteStyle = NoteStyle.STANDARD
     tags: Optional[str] = None
-    quest_id: Optional[int] = None
+    note_style: NoteStyle = NoteStyle.STANDARD
+    language: Optional[NoteLanguage] = None
 
+    def map_to_deepgram_language(self, language: NoteLanguage) -> Optional[DeepgramLanguageEnum]:
+        try: 
+            return DeepgramLanguageEnum(language)
+        except ValueError:
+            return None
 
+class ProcessedVoiceNoteCreate(VoiceNoteCreate):
+    title: str
+    content: str
+    raw_transcript: str
+    ai_processed: bool
+    processing_status: Optional[NoteProcessingStatus] = None
+    language: Optional[NoteLanguage] = None
+    audio_duration: float
 # Voice Note Processing Result
 class VoiceNoteResult(BaseModel):
     id: int
@@ -76,7 +103,7 @@ class VoiceNoteResult(BaseModel):
     content: Optional[str] = None
     raw_transcript: Optional[str] = None
     audio_duration: float
-    language: str
+    language: NoteLanguage
     ai_processed: bool
     ai_summary: Optional[str] = None
 
