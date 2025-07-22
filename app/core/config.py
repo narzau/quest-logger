@@ -43,6 +43,11 @@ class Settings(BaseSettings):
     # Database settings
     SQLALCHEMY_DATABASE_URI: str
 
+    # Supabase-specific settings (optional, for migrations/management)
+    SUPABASE_URL: Optional[str] = None
+    SUPABASE_KEY: Optional[str] = None
+    SUPABASE_PROJECT_ID: Optional[str] = None
+
     # JWT settings
     JWT_ALGORITHM: str = "HS256"
 

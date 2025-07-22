@@ -157,6 +157,46 @@ class LogContextMiddleware(BaseHTTPMiddleware):
             request_context.reset(token)
 
 
+class ProxyHeadersMiddleware:
+    """
+    Middleware to handle proxy headers (X-Forwarded-For, X-Forwarded-Proto, etc.)
+    when the application is behind a reverse proxy.
+    """
+    
+    def __init__(self, app, trusted_hosts: list[str] | None = None):
+        self.app = app
+        self.trusted_hosts = trusted_hosts or ["*"]
+    
+    async def __call__(self, scope, receive, send):
+        if scope["type"] == "http":
+            headers = dict(scope["headers"])
+            
+            # Handle X-Forwarded-For
+            forwarded_for = headers.get(b"x-forwarded-for")
+            if forwarded_for:
+                # Get the client IP from X-Forwarded-For header
+                client_ip = forwarded_for.decode("latin-1").split(",")[0].strip()
+                scope["client"] = (client_ip, scope["client"][1])
+            
+            # Handle X-Forwarded-Proto
+            forwarded_proto = headers.get(b"x-forwarded-proto")
+            if forwarded_proto:
+                scope["scheme"] = forwarded_proto.decode("latin-1")
+            
+            # Handle X-Forwarded-Host
+            forwarded_host = headers.get(b"x-forwarded-host")
+            if forwarded_host and (self.trusted_hosts == ["*"] or any(
+                host in forwarded_host.decode("latin-1") for host in self.trusted_hosts
+            )):
+                # Update the host header
+                scope["headers"] = [
+                    (name, value) for name, value in scope["headers"]
+                    if name != b"host"
+                ] + [(b"host", forwarded_host)]
+        
+        await self.app(scope, receive, send)
+
+
 def register_middlewares(app: FastAPI) -> None:
     """
     Register all middlewares with the FastAPI app.

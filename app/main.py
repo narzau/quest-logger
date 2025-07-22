@@ -10,7 +10,7 @@ from app.api.api import api_router
 from app.core.config import settings
 from app.core.logging import setup_logging
 from app.core.error_handlers import register_exception_handlers
-from app.core.middleware import register_middlewares
+from app.core.middleware import register_middlewares, ProxyHeadersMiddleware
 from app.db.base import SessionLocal
 from app.services.subscription_service import SubscriptionService
 from app.services import register_services
@@ -90,6 +90,9 @@ register_exception_handlers(app)
 
 # Register middleware
 register_middlewares(app)
+
+# Add ProxyHeadersMiddleware to handle X-Forwarded-* headers
+app.add_middleware(ProxyHeadersMiddleware, trusted_hosts=["*"])
 
 # Set up CORS middleware
 if settings.BACKEND_CORS_ORIGINS:
