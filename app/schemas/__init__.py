@@ -30,3 +30,14 @@ from app.schemas.subscription import (
     SubscriptionUpdate,
     SubscriptionStatus,
 )
+from app.schemas.time_tracking import (
+    TimeEntry,
+    TimeEntryCreate,
+    TimeEntryUpdate,
+    TimeEntryList,
+    SessionStart,
+    TimeTrackingSettings,
+    TimeTrackingSettingsCreate,
+    TimeTrackingSettingsUpdate,
+    TimeTrackingStats,
+)

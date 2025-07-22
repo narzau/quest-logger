@@ -9,6 +9,7 @@ from app.api.routes import (
     google_auth,
     notes,
     subscription,
+    time_tracking,
 )
 from app.core.config import settings
 
@@ -25,4 +26,7 @@ api_router.include_router(
 api_router.include_router(notes.router, prefix="/notes", tags=["notes"])
 api_router.include_router(
     subscription.router, prefix="/subscription", tags=["subscription"]
+)
+api_router.include_router(
+    time_tracking.router, prefix="/time-tracking", tags=["time_tracking"]
 )

@@ -31,3 +31,10 @@ class User(Base):
         uselist=False,
         cascade="all, delete-orphan",
     )
+    time_entries = relationship("TimeEntry", back_populates="user", cascade="all, delete-orphan")
+    time_tracking_settings = relationship(
+        "TimeTrackingSettings",
+        back_populates="user",
+        uselist=False,
+        cascade="all, delete-orphan",
+    )
