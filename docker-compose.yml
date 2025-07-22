@@ -8,24 +8,20 @@ services:
       - .:/app
     ports:
       - "8000:8000"
-    depends_on:
-      db:
-        condition: service_healthy
-    environment:
-      - SQLALCHEMY_DATABASE_URI=${SQLALCHEMY_DATABASE_URI}
-      - SEED_DB=${SEED_DB:-false}
+    env_file:
+      - ./.env
     networks:
       - app-network
     command: >
-      bash -c "if [ ! -f /app/alembic/versions/*.py ]; then
+      bash -c "if ls /app/alembic/versions/*.py 1> /dev/null 2>&1; then
+                echo 'Migrations already exist.'
+              else
                 echo 'No migrations found. Creating initial migration...'
                 alembic revision --autogenerate -m 'initial'
-              else
-                echo 'Migrations already exist.'
               fi &&
               echo 'Applying any pending migrations...' &&
               alembic upgrade head &&
-              if [ \"$SEED_DB\" = \"true\" ]; then
+              if [ \"\$SEED_DB\" = \"true\" ]; then
                 echo 'Seeding data...'
                 python scripts/seed_data.py
               else
@@ -34,29 +30,7 @@ services:
               echo 'Starting API...' &&
               uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
 
-  db:
-    image: postgres:15
-    container_name: quest-tracker-db
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    environment:
-      - SQLALCHEMY_DATABASE_URI=postgresql://postgres:postgres@db/quest_tracker
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=postgres
-      - POSTGRES_DB=quest_tracker
-    ports:
-      - "5432:5432"
-    networks:
-      - app-network
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-
 networks:
   app-network:
     driver: bridge
 
-volumes:
-  postgres_data:
