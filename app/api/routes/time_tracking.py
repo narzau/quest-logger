@@ -22,6 +22,8 @@ from app.schemas.time_tracking import (
     TimeTrackingStats,
     GenerateInvoiceLinkRequest,
     GenerateInvoiceLinkResponse,
+    BatchUpdatePaymentStatusRequest,
+    BatchUpdatePaymentStatusResponse,
 )
 from app.core.logging import log_context
 from app.core.exceptions import BusinessException, ResourceNotFoundException
@@ -276,4 +278,46 @@ async def generate_invoice_link(
         
         logger.info(f"Generated invoice link for user {current_user.id}, expires at {expires_at}")
         
-        return GenerateInvoiceLinkResponse(public_url=public_url) 
+        return GenerateInvoiceLinkResponse(public_url=public_url)
+
+
+# Batch update endpoints
+
+@router.post("/batch-update-payment-status", response_model=BatchUpdatePaymentStatusResponse)
+async def batch_update_payment_status(
+    data: BatchUpdatePaymentStatusRequest,
+    current_user: User = Depends(get_current_user),
+    time_tracking_service: TimeTrackingService = Depends(get_service(TimeTrackingService)),
+) -> BatchUpdatePaymentStatusResponse:
+    """
+    Batch update payment status for multiple time entries.
+    
+    All entries must belong to the authenticated user.
+    """
+    with log_context(
+        user_id=current_user.id,
+        action="batch_update_payment_status",
+        entry_count=len(data.entry_ids),
+        new_status=data.payment_status
+    ):
+        try:
+            updated_count = await time_tracking_service.batch_update_payment_status(
+                user_id=current_user.id,
+                entry_ids=data.entry_ids,
+                payment_status=data.payment_status
+            )
+            
+            return BatchUpdatePaymentStatusResponse(
+                message=f"Successfully updated {updated_count} entries",
+                updated_count=updated_count
+            )
+            
+        except ResourceNotFoundException as e:
+            logger.warning(f"Time entries not found: {str(e)}")
+            raise HTTPException(status_code=404, detail=str(e))
+        except BusinessException as e:
+            logger.warning(f"Business error in batch update: {str(e)}")
+            # Check if it's a permission error
+            if "permission" in str(e).lower():
+                raise HTTPException(status_code=403, detail=str(e))
+            raise HTTPException(status_code=400, detail=str(e)) 

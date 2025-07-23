@@ -98,4 +98,15 @@ class GenerateInvoiceLinkRequest(BaseModel):
 
 
 class GenerateInvoiceLinkResponse(BaseModel):
-    public_url: str 
+    public_url: str
+
+
+# Batch update schemas
+class BatchUpdatePaymentStatusRequest(BaseModel):
+    entry_ids: list[int] = Field(..., min_items=1, description="List of time entry IDs to update")
+    payment_status: TimeEntryPaymentStatus = Field(..., description="New payment status to set")
+
+
+class BatchUpdatePaymentStatusResponse(BaseModel):
+    message: str
+    updated_count: int 

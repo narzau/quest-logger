@@ -1,5 +1,5 @@
 import logging
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 from datetime import datetime, date
 from sqlalchemy.orm import Session
 from fastapi import HTTPException
@@ -16,7 +16,7 @@ from app.schemas.time_tracking import (
     TimeTrackingSettingsUpdate,
     TimeTrackingStats,
 )
-from app.models.time_tracking import TimeEntryPaymentStatus
+from app.models.time_tracking import TimeEntryPaymentStatus, TimeEntry as TimeEntryModel
 from app.core.exceptions import BusinessException, ResourceNotFoundException
 
 logger = logging.getLogger(__name__)
@@ -198,4 +198,56 @@ class TimeTrackingService:
             settings = self.settings_repository.update_settings(settings, data)
         
         logger.info(f"Updated time tracking settings for user {user_id}")
-        return settings 
+        return settings
+
+    async def batch_update_payment_status(
+        self,
+        user_id: int,
+        entry_ids: List[int],
+        payment_status: TimeEntryPaymentStatus
+    ) -> int:
+        """
+        Batch update payment status for multiple time entries.
+        
+        Returns the number of entries updated.
+        Raises exceptions if validation fails.
+        """
+        if not entry_ids:
+            raise BusinessException("No entry IDs provided")
+        
+        # Fetch all entries to validate ownership
+        entries = self.db.query(TimeEntryModel).filter(
+            TimeEntryModel.id.in_(entry_ids)
+        ).all()
+        
+        # Check if all entries exist
+        if len(entries) != len(entry_ids):
+            found_ids = {entry.id for entry in entries}
+            missing_ids = set(entry_ids) - found_ids
+            raise ResourceNotFoundException(f"Time entries not found: {missing_ids}")
+        
+        # Check if all entries belong to the user
+        not_owned = [entry.id for entry in entries if entry.user_id != user_id]
+        if not_owned:
+            logger.warning(f"User {user_id} attempted to update entries they don't own: {not_owned}")
+            raise BusinessException(f"You don't have permission to update entries: {not_owned}")
+        
+        # Update all entries in a single transaction
+        try:
+            updated_count = self.db.query(TimeEntryModel).filter(
+                TimeEntryModel.id.in_(entry_ids),
+                TimeEntryModel.user_id == user_id
+            ).update({
+                TimeEntryModel.payment_status: payment_status,
+                TimeEntryModel.updated_at: datetime.utcnow()
+            }, synchronize_session=False)
+            
+            self.db.commit()
+            
+            logger.info(f"Batch updated {updated_count} time entries for user {user_id} to status {payment_status}")
+            return updated_count
+            
+        except Exception as e:
+            self.db.rollback()
+            logger.error(f"Error batch updating payment status: {str(e)}")
+            raise BusinessException("Failed to update payment status") 
