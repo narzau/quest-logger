@@ -10,6 +10,7 @@ from app.api.routes import (
     notes,
     subscription,
     time_tracking,
+    public,
 )
 from app.core.config import settings
 
@@ -29,4 +30,7 @@ api_router.include_router(
 )
 api_router.include_router(
     time_tracking.router, prefix="/time-tracking", tags=["time_tracking"]
+)
+api_router.include_router(
+    public.router, prefix="/public", tags=["public"]
 )

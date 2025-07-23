@@ -86,4 +86,16 @@ class TimeEntryList(BaseModel):
     total: int
     page: int
     size: int
-    pages: int 
+    pages: int
+
+
+# Invoice link generation
+class GenerateInvoiceLinkRequest(BaseModel):
+    start_date: Optional[date] = None
+    end_date: Optional[date] = None
+    payment_status: Optional[TimeEntryPaymentStatus] = None
+    expires_in_days: int = Field(default=30, ge=1, le=365)
+
+
+class GenerateInvoiceLinkResponse(BaseModel):
+    public_url: str 

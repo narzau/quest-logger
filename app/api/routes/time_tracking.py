@@ -1,6 +1,10 @@
 import logging
 from typing import Optional
-from datetime import date
+from datetime import date, datetime, timedelta
+import hmac
+import hashlib
+import json
+import base64
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 
@@ -16,6 +20,8 @@ from app.schemas.time_tracking import (
     TimeTrackingSettings,
     TimeTrackingSettingsUpdate,
     TimeTrackingStats,
+    GenerateInvoiceLinkRequest,
+    GenerateInvoiceLinkResponse,
 )
 from app.core.logging import log_context
 from app.core.exceptions import BusinessException, ResourceNotFoundException
@@ -219,4 +225,55 @@ async def update_settings(
     """Update time tracking settings"""
     with log_context(user_id=current_user.id, action="update_settings"):
         logger.info(f"Updating settings for user {current_user.id}")
-        return await time_tracking_service.update_settings(current_user.id, data) 
+        return await time_tracking_service.update_settings(current_user.id, data)
+
+
+# Invoice sharing endpoints
+
+@router.post("/generate-invoice-link", response_model=GenerateInvoiceLinkResponse)
+async def generate_invoice_link(
+    data: GenerateInvoiceLinkRequest,
+    current_user: User = Depends(get_current_user),
+) -> GenerateInvoiceLinkResponse:
+    """Generate a secure, shareable invoice link with expiration"""
+    with log_context(user_id=current_user.id, action="generate_invoice_link"):
+        from app.core.config import settings
+        
+        # Create the payload
+        now = datetime.utcnow()
+        expires_at = now + timedelta(days=data.expires_in_days)
+        
+        payload = {
+            "user_id": current_user.id,
+            "generated_at": now.isoformat(),
+            "expires_at": expires_at.isoformat(),
+            "filters": {
+                "start_date": data.start_date.isoformat() if data.start_date else None,
+                "end_date": data.end_date.isoformat() if data.end_date else None,
+                "payment_status": data.payment_status.value if data.payment_status else None,
+            }
+        }
+        
+        # Convert payload to JSON and encode
+        payload_json = json.dumps(payload, separators=(',', ':'))
+        payload_bytes = payload_json.encode('utf-8')
+        
+        # Create HMAC signature
+        signature = hmac.new(
+            settings.SECRET_KEY.encode('utf-8'),
+            payload_bytes,
+            hashlib.sha256
+        ).digest()
+        
+        # Combine payload and signature
+        token_data = payload_bytes + b'.' + signature
+        
+        # Base64url encode the token
+        token = base64.urlsafe_b64encode(token_data).decode('utf-8').rstrip('=')
+        
+        # Generate the public URL
+        public_url = f"{settings.FRONTEND_URL}/public/invoice/{token}"
+        
+        logger.info(f"Generated invoice link for user {current_user.id}, expires at {expires_at}")
+        
+        return GenerateInvoiceLinkResponse(public_url=public_url) 
