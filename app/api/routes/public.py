@@ -97,15 +97,7 @@ async def get_public_invoice(
             if filters.get('end_date'):
                 end_date = datetime.fromisoformat(filters['end_date']).date()
                 query = query.filter(TimeEntryModel.date <= end_date)
-            
-            # Apply payment status filter from token
-            if filters.get('payment_status'):
-                try:
-                    payment_status_enum = TimeEntryPaymentStatus(filters['payment_status'])
-                    query = query.filter(TimeEntryModel.payment_status == payment_status_enum)
-                except ValueError:
-                    logger.warning(f"Invalid payment status in token: {filters['payment_status']}")
-                    # Still proceed but without the filter
+
             
             # Order by start_time descending (most recent first)
             query = query.order_by(desc(TimeEntryModel.start_time))
